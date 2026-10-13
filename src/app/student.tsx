@@ -1,29 +1,56 @@
-import { router } from 'expo-router';
-import { StyleSheet, View } from 'react-native';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback } from 'react';
+import { BackHandler, Pressable, StyleSheet, View } from 'react-native';
 
 import { ActivityCard } from '@/components/activity-card';
 import { LessonRow } from '@/components/lesson-card';
 import { SubjectIcon } from '@/components/subject-icon';
 import { ThemedText } from '@/components/themed-text';
-import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ErrorState, Loading } from '@/components/ui/query-state';
 import { Screen } from '@/components/ui/screen';
 import { Section } from '@/components/ui/section';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { useChild } from '@/context/child-context';
 import { useChildProfile, useOverview } from '@/hooks/queries';
+import { useTheme } from '@/hooks/use-theme';
 
-/** A simplified, child-friendly view. Parent-only screens are reached only via "Back to Parent Mode". */
+const exitStudentMode = () => (router.canGoBack() ? router.back() : router.replace('/profile'));
+
+/**
+ * A simplified, child-friendly view. Leaving needs a press-and-hold (and the Android back button is ignored)
+ * so a child doesn't drop into Parent Mode by accident. This is a convenience, not a security boundary.
+ */
 export default function StudentModeScreen() {
+  const theme = useTheme();
   const { child } = useChild();
   const overview = useOverview();
   const profile = useChildProfile();
   const data = overview.data;
 
+  useFocusEffect(
+    useCallback(() => {
+      const sub = BackHandler.addEventListener('hardwareBackPress', () => true);
+      return () => sub.remove();
+    }, []),
+  );
+
   return (
     <Screen tab>
-      <Button variant="ghost" small label="← Back to Parent Mode" onPress={() => router.back()} />
+      <Pressable
+        onLongPress={exitStudentMode}
+        delayLongPress={800}
+        accessibilityRole="button"
+        accessibilityLabel="Return to Parent Mode"
+        accessibilityHint="Press and hold to return to Parent Mode"
+        style={({ pressed }) => [
+          styles.exit,
+          { borderColor: theme.border, backgroundColor: pressed ? theme.primarySoft : theme.backgroundElement },
+        ]}>
+        <ThemedText type="caption" themeColor="textSecondary">
+          🔒 Press and hold to return to Parent Mode
+        </ThemedText>
+      </Pressable>
       <Card tone="primarySoft" style={styles.hero}>
         <ThemedText style={styles.avatar}>{child?.avatar}</ThemedText>
         <ThemedText type="label" themeColor="primary">
@@ -44,9 +71,11 @@ export default function StudentModeScreen() {
       ) : (
         <>
           <Section title="Today's Lessons">
-            {data.todayLessons.map((l) => (
-              <LessonRow key={l.id} lesson={l} />
-            ))}
+            {data.todayLessons.length === 0 ? (
+              <ThemedText themeColor="textSecondary">No lessons recorded today yet. 📚</ThemedText>
+            ) : (
+              data.todayLessons.map((l) => <LessonRow key={l.id} lesson={l} />)
+            )}
           </Section>
 
           {profile.data && (
@@ -89,6 +118,13 @@ export default function StudentModeScreen() {
 }
 
 const styles = StyleSheet.create({
+  exit: {
+    alignSelf: 'flex-start',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: Radius.pill,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+  },
   hero: { alignItems: 'center' },
   avatar: { fontSize: 48, lineHeight: 60 },
   subjects: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },

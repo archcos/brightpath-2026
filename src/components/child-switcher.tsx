@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import { Modal, Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { Card } from '@/components/ui/card';
+import { Popup } from '@/components/ui/popup';
 import { Radius, Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth-context';
 import { useChild } from '@/context/child-context';
-import { useSettings } from '@/context/settings-context';
 import { useTheme } from '@/hooks/use-theme';
 
 /** Card showing the child being viewed, with a picker to switch between connected children. */
@@ -14,7 +14,6 @@ export function ChildSwitcher() {
   const theme = useTheme();
   const { children } = useAuth();
   const { child, selectChild } = useChild();
-  const { settings } = useSettings();
   const [open, setOpen] = useState(false);
   if (!child) return null;
 
@@ -46,36 +45,35 @@ export function ChildSwitcher() {
         )}
       </Card>
 
-      <Modal visible={open} transparent animationType={settings.reduceMotion ? "none" : "fade"} onRequestClose={() => setOpen(false)}>
-        <Pressable style={styles.backdrop} onPress={() => setOpen(false)} accessibilityLabel="Close">
-          {/* Claims touches so tapping inside the sheet doesn't close it. */}
-          <View
-            onStartShouldSetResponder={() => true}
-            style={[styles.sheet, { backgroundColor: theme.backgroundElement }]}>
-            <ThemedText type="heading">Switch child</ThemedText>
-            {children.map((c) => (
-              <Pressable
-                key={c.id}
-                accessibilityRole="button"
-                onPress={() => {
-                  selectChild(c.id);
-                  setOpen(false);
-                }}
-                style={[styles.option, c.id === child.id && { backgroundColor: theme.primarySoft }]}>
-                <ThemedText style={styles.avatarSmall}>{c.avatar}</ThemedText>
-                <View style={styles.flex}>
-                  <ThemedText type="smallBold">
-                    {c.firstName} {c.lastName}
-                  </ThemedText>
-                  <ThemedText type="caption" themeColor="textSecondary">
-                    Grade {c.grade} • Section {c.section}
-                  </ThemedText>
-                </View>
-              </Pressable>
-            ))}
-          </View>
-        </Pressable>
-      </Modal>
+      <Popup visible={open} onClose={() => setOpen(false)}>
+        <ThemedText type="heading">Switch child</ThemedText>
+        {children.map((c) => (
+          <Pressable
+            key={c.id}
+            accessibilityRole="radio"
+            accessibilityState={{ checked: c.id === child.id }}
+            onPress={() => {
+              selectChild(c.id);
+              setOpen(false);
+            }}
+            style={({ pressed }) => [
+              styles.option,
+              c.id === child.id && { backgroundColor: theme.primarySoft },
+              pressed && styles.pressed,
+            ]}>
+            <ThemedText style={styles.avatarSmall}>{c.avatar}</ThemedText>
+            <View style={styles.flex}>
+              <ThemedText type="smallBold">
+                {c.firstName} {c.lastName}
+              </ThemedText>
+              <ThemedText type="caption" themeColor="textSecondary">
+                Grade {c.grade} • Section {c.section}
+              </ThemedText>
+            </View>
+            {c.id === child.id && <ThemedText themeColor="primary">✓</ThemedText>}
+          </Pressable>
+        ))}
+      </Popup>
     </>
   );
 }
@@ -86,7 +84,6 @@ const styles = StyleSheet.create({
   avatarSmall: { fontSize: 24, lineHeight: 32 },
   flex: { flex: 1, gap: Spacing.half },
   switch: { borderRadius: Radius.md, paddingHorizontal: Spacing.three, paddingVertical: Spacing.two, alignItems: 'center' },
-  backdrop: { flex: 1, backgroundColor: '#0008', justifyContent: 'center', padding: Spacing.four },
-  sheet: { borderRadius: Radius.lg, padding: Spacing.four, gap: Spacing.two, width: '100%', maxWidth: 420, alignSelf: 'center' },
   option: { flexDirection: 'row', gap: Spacing.three, alignItems: 'center', padding: Spacing.two, borderRadius: Radius.md },
+  pressed: { opacity: 0.7 },
 });

@@ -24,7 +24,8 @@ export function Section({ title, subtitle, action, children }: SectionProps) {
           )}
         </View>
         {action && (
-          <Pressable onPress={() => router.push(action.href)} accessibilityRole="link" hitSlop={8}>
+          // navigate (not push) so links to a tab switch to it instead of stacking a copy.
+          <Pressable onPress={() => router.navigate(action.href)} accessibilityRole="link" hitSlop={8}>
             <ThemedText type="link">{action.label}</ThemedText>
           </Pressable>
         )}

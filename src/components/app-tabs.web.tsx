@@ -14,14 +14,17 @@ const TABS = [
 ] as const;
 
 export default function AppTabs() {
+  const theme = useTheme();
   return (
-    <Tabs>
-      <TabSlot style={{ height: '100%' }} />
+    <Tabs style={{ flex: 1, backgroundColor: theme.background }}>
+      <TabSlot style={{ height: '100%', backgroundColor: theme.background }} />
       <TabList asChild>
         <BottomBar>
           {TABS.map((tab) => (
             <TabTrigger key={tab.name} name={tab.name} href={tab.href} asChild>
-              <TabButton icon={tab.icon}>{tab.label}</TabButton>
+              <TabButton icon={tab.icon} label={tab.label}>
+                {tab.label}
+              </TabButton>
             </TabTrigger>
           ))}
         </BottomBar>
@@ -30,11 +33,17 @@ export default function AppTabs() {
   );
 }
 
-function TabButton({ children, isFocused, icon, ...props }: TabTriggerSlotProps & { icon: string }) {
+function TabButton({ children, isFocused, icon, label, ...props }: TabTriggerSlotProps & { icon: string; label: string }) {
   const theme = useTheme();
   return (
-    <Pressable {...props} style={[styles.tab, isFocused && { backgroundColor: theme.primarySoft }]}>
-      <ThemedText style={styles.icon}>{icon}</ThemedText>
+    <Pressable
+      {...props}
+      accessibilityLabel={label}
+      accessibilityState={{ selected: !!isFocused }}
+      style={[styles.tab, isFocused && { backgroundColor: theme.primarySoft }]}>
+      <ThemedText style={styles.icon} aria-hidden>
+        {icon}
+      </ThemedText>
       <ThemedText type="caption" style={{ color: isFocused ? theme.primary : theme.textSecondary }}>
         {children}
       </ThemedText>

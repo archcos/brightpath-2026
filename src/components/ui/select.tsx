@@ -1,29 +1,31 @@
 import { useMemo, useState } from 'react';
-import { FlatList, Modal, Pressable, StyleSheet, TextInput, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { FlatList, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
+import { Popup } from '@/components/ui/popup';
 import { Radius, Spacing } from '@/constants/theme';
-import { useSettings } from '@/context/settings-context';
 import { useTheme } from '@/hooks/use-theme';
 
-export type SelectOption = { value: string; label: string; description?: string };
+export type SelectOption<T extends string = string> = { value: T; label: string; description?: string };
 
-type SelectProps = {
+type SelectProps<T extends string> = {
   label: string;
-  options: SelectOption[];
-  value: string;
-  onChange: (value: string) => void;
+  options: SelectOption<T>[];
+  value: T;
+  onChange: (value: T) => void;
   placeholder?: string;
   searchPlaceholder?: string;
   emptyText?: string;
+  /** Show a search box. Defaults to on for long lists only, so short pickers never open the keyboard. */
+  searchable?: boolean;
+  /** Smaller label for filter rows (e.g. two dropdowns side by side). */
+  compact?: boolean;
 };
 
-/**
- * Dropdown with search, for lists that can grow long (schools, sections).
- * Shows the full list when opened; typing filters it by label and description.
- */
-export function Select({
+const SEARCH_THRESHOLD = 8;
+
+/** A dropdown: tap to open a list in a popup and pick one. Long lists (schools, sections) get a search box. */
+export function Select<T extends string>({
   label,
   options,
   value,
@@ -31,10 +33,10 @@ export function Select({
   placeholder = 'Choose…',
   searchPlaceholder = 'Search…',
   emptyText = 'No matches',
-}: SelectProps) {
+  searchable = options.length > SEARCH_THRESHOLD,
+  compact,
+}: SelectProps<T>) {
   const theme = useTheme();
-  const insets = useSafeAreaInsets();
-  const { settings } = useSettings();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const selected = options.find((o) => o.value === value);
@@ -51,38 +53,42 @@ export function Select({
   };
 
   return (
-    <View style={styles.field}>
-      <ThemedText type="smallBold">{label}</ThemedText>
+    <View style={[styles.field, compact && styles.compactField]}>
+      <ThemedText type={compact ? 'label' : 'smallBold'} themeColor={compact ? 'textSecondary' : undefined}>
+        {label}
+      </ThemedText>
       <Pressable
         onPress={() => setOpen(true)}
         accessibilityRole="button"
         accessibilityLabel={`${label}: ${selected?.label ?? placeholder}`}
-        accessibilityHint="Opens a searchable list"
+        accessibilityHint="Opens a list of choices"
         style={({ pressed }) => [
           styles.trigger,
+          compact && styles.compactTrigger,
           { backgroundColor: theme.backgroundElement, borderColor: theme.border },
           pressed && styles.pressed,
         ]}>
-        <ThemedText style={styles.flex} themeColor={selected ? 'text' : 'textSecondary'} numberOfLines={1}>
+        <ThemedText
+          type={compact ? 'smallBold' : 'default'}
+          style={styles.flex}
+          themeColor={selected ? 'text' : 'textSecondary'}
+          numberOfLines={1}>
           {selected?.label ?? placeholder}
         </ThemedText>
         <ThemedText themeColor="textSecondary">▾</ThemedText>
       </Pressable>
 
-      <Modal visible={open} transparent animationType={settings.reduceMotion ? 'none' : 'fade'} onRequestClose={close}>
-        <Pressable style={styles.backdrop} onPress={close} accessibilityLabel="Close">
-          {/* Claims touches so tapping inside the sheet doesn't close it. */}
-          <View
-            onStartShouldSetResponder={() => true}
-            style={[styles.sheet, { backgroundColor: theme.background, marginTop: insets.top + Spacing.five }]}>
-            <View style={styles.sheetHeader}>
-              <ThemedText type="heading" style={styles.flex}>
-                {label}
-              </ThemedText>
-              <Pressable onPress={close} accessibilityRole="button" accessibilityLabel="Close" hitSlop={12}>
-                <ThemedText type="link">Done</ThemedText>
-              </Pressable>
-            </View>
+      <Popup visible={open} onClose={close} style={searchable && styles.tall}>
+        <View style={styles.header}>
+          <ThemedText type="heading" style={styles.flex}>
+            {label}
+          </ThemedText>
+          <Pressable onPress={close} accessibilityRole="button" accessibilityLabel="Close" hitSlop={12}>
+            <ThemedText type="link">Done</ThemedText>
+          </Pressable>
+        </View>
+        {searchable && (
+          <>
             <TextInput
               value={query}
               onChangeText={setQuery}
@@ -96,56 +102,62 @@ export function Select({
             <ThemedText type="caption" themeColor="textSecondary">
               {filtered.length} of {options.length}
             </ThemedText>
-            <FlatList
-              data={filtered}
-              keyExtractor={(o) => o.value}
-              keyboardShouldPersistTaps="handled"
-              style={styles.list}
-              ListEmptyComponent={
-                <ThemedText themeColor="textSecondary" style={styles.empty}>
-                  {emptyText}
-                </ThemedText>
-              }
-              renderItem={({ item }) => {
-                const active = item.value === value;
-                return (
-                  <Pressable
-                    onPress={() => {
-                      onChange(item.value);
-                      close();
-                    }}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: active }}
-                    style={({ pressed }) => [
-                      styles.option,
-                      { borderColor: theme.border },
-                      active && { backgroundColor: theme.primarySoft },
-                      pressed && styles.pressed,
-                    ]}>
-                    <View style={styles.flex}>
-                      <ThemedText type="smallBold" style={active ? { color: theme.primary } : undefined}>
-                        {item.label}
-                      </ThemedText>
-                      {item.description && (
-                        <ThemedText type="caption" themeColor="textSecondary">
-                          {item.description}
-                        </ThemedText>
-                      )}
-                    </View>
-                    {active && <ThemedText themeColor="primary">✓</ThemedText>}
-                  </Pressable>
-                );
-              }}
-            />
-          </View>
-        </Pressable>
-      </Modal>
+          </>
+        )}
+        <FlatList
+          data={filtered}
+          keyExtractor={(o) => o.value}
+          keyboardShouldPersistTaps="handled"
+          style={styles.list}
+          ListEmptyComponent={
+            <ThemedText themeColor="textSecondary" style={styles.empty}>
+              {emptyText}
+            </ThemedText>
+          }
+          renderItem={({ item }) => {
+            const active = item.value === value;
+            return (
+              <Pressable
+                onPress={() => {
+                  onChange(item.value);
+                  close();
+                }}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: active }}
+                style={({ pressed }) => [
+                  styles.option,
+                  { borderColor: theme.border },
+                  active && { backgroundColor: theme.primarySoft },
+                  pressed && styles.pressed,
+                ]}>
+                <View style={styles.flex}>
+                  <ThemedText type="smallBold" style={active ? { color: theme.primary } : undefined}>
+                    {item.label}
+                  </ThemedText>
+                  {item.description && (
+                    <ThemedText type="caption" themeColor="textSecondary">
+                      {item.description}
+                    </ThemedText>
+                  )}
+                </View>
+                {active && <ThemedText themeColor="primary">✓</ThemedText>}
+              </Pressable>
+            );
+          }}
+        />
+      </Popup>
     </View>
   );
 }
 
+/** Two or more compact dropdowns side by side, e.g. "Type" and "Status" filters. */
+export function FilterRow({ children }: { children: React.ReactNode }) {
+  return <View style={styles.filterRow}>{children}</View>;
+}
+
 const styles = StyleSheet.create({
   field: { gap: Spacing.one },
+  compactField: { flex: 1, minWidth: 0 },
   flex: { flex: 1 },
   trigger: {
     minHeight: 48,
@@ -156,19 +168,11 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     paddingHorizontal: Spacing.three,
   },
+  compactTrigger: { minHeight: 44 },
   pressed: { opacity: 0.7 },
-  backdrop: { flex: 1, backgroundColor: '#0008', padding: Spacing.three },
-  sheet: {
-    flexShrink: 1,
-    maxHeight: '85%',
-    width: '100%',
-    maxWidth: 520,
-    alignSelf: 'center',
-    borderRadius: Radius.lg,
-    padding: Spacing.three,
-    gap: Spacing.two,
-  },
-  sheetHeader: { flexDirection: 'row', alignItems: 'center' },
+  header: { flexDirection: 'row', alignItems: 'center' },
+  // Long, searchable lists get a fixed height so the card doesn't jump while filtering.
+  tall: { height: '80%' },
   search: { minHeight: 44, borderWidth: 1, borderRadius: Radius.md, paddingHorizontal: Spacing.three, fontSize: 16 },
   list: { flexGrow: 0 },
   option: {
@@ -181,4 +185,5 @@ const styles = StyleSheet.create({
     borderRadius: Radius.sm,
   },
   empty: { textAlign: 'center', paddingVertical: Spacing.four },
+  filterRow: { flexDirection: 'row', gap: Spacing.two },
 });

@@ -5,7 +5,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
-import { Chips } from '@/components/ui/chips';
+import { Segmented } from '@/components/ui/segmented';
 import { EmptyState, ErrorState, Loading } from '@/components/ui/query-state';
 import { Screen } from '@/components/ui/screen';
 import { Radius, Spacing } from '@/constants/theme';
@@ -13,7 +13,15 @@ import { useChild } from '@/context/child-context';
 import { useCalendar } from '@/hooks/queries';
 import { useTheme } from '@/hooks/use-theme';
 import type { CalendarEntry } from '@/types/api';
-import { ACTIVITY_TYPE_LABEL, activityBadge, formatLongDate, formatTime, parseDate, toISODate } from '@/utils/format';
+import {
+  ACTIVITY_TYPE_LABEL,
+  activityBadge,
+  formatLongDate,
+  formatMonthDay,
+  formatTime,
+  parseDate,
+  toISODate,
+} from '@/utils/format';
 
 type CalendarMode = 'month' | 'week' | 'agenda';
 const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
@@ -24,15 +32,48 @@ export default function CalendarScreen() {
   const [mode, setMode] = useState<CalendarMode>('month');
   const [selected, setSelected] = useState(() => toISODate(new Date()));
   const month = selected.slice(0, 7);
-  const { data, isLoading, error, refetch, isRefetching } = useCalendar(month);
+
+  const weekDays = useMemo(() => {
+    const start = parseDate(selected);
+    start.setDate(start.getDate() - start.getDay());
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(start);
+      d.setDate(start.getDate() + i);
+      return toISODate(d);
+    });
+  }, [selected]);
+
+  // A week can straddle two months; load both so neither half shows up empty.
+  const firstMonth = mode === 'week' ? weekDays[0].slice(0, 7) : month;
+  const lastMonth = mode === 'week' ? weekDays[6].slice(0, 7) : month;
+  const first = useCalendar(firstMonth);
+  const last = useCalendar(lastMonth);
+  const isLoading = first.isLoading || last.isLoading;
+  const error = first.error ?? last.error;
+  const isRefetching = first.isRefetching || last.isRefetching;
+  const refetch = () => {
+    first.refetch();
+    if (lastMonth !== firstMonth) last.refetch();
+  };
+  const data = useMemo(
+    () => [...(first.data ?? []), ...(lastMonth !== firstMonth ? (last.data ?? []) : [])],
+    [first.data, last.data, firstMonth, lastMonth],
+  );
 
   const byDate = useMemo(() => {
     const map = new Map<string, CalendarEntry[]>();
-    for (const e of data ?? []) map.set(e.date, [...(map.get(e.date) ?? []), e]);
+    for (const e of data) map.set(e.date, [...(map.get(e.date) ?? []), e]);
     return map;
   }, [data]);
 
-  const shiftMonth = (delta: number) => {
+  // Arrows move by week in week view, otherwise by month.
+  const shift = (delta: number) => {
+    if (mode === 'week') {
+      const d = parseDate(selected);
+      d.setDate(d.getDate() + delta * 7);
+      setSelected(toISODate(d));
+      return;
+    }
     const d = parseDate(`${month}-01`);
     d.setMonth(d.getMonth() + delta);
     setSelected(toISODate(d));
@@ -45,17 +86,12 @@ export default function CalendarScreen() {
     ...Array.from({ length: daysInMonth }, (_, i) => `${month}-${String(i + 1).padStart(2, '0')}`),
   ];
 
-  const weekDays = useMemo(() => {
-    const start = parseDate(selected);
-    start.setDate(start.getDate() - start.getDay());
-    return Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(start);
-      d.setDate(start.getDate() + i);
-      return toISODate(d);
-    });
-  }, [selected]);
-
   const today = toISODate(new Date());
+  const unit = mode === 'week' ? 'week' : 'month';
+  const heading =
+    mode === 'week'
+      ? `${formatMonthDay(weekDays[0])} – ${formatMonthDay(weekDays[6])}`
+      : monthDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
   return (
     <Screen tab refreshing={isRefetching} onRefresh={refetch}>
@@ -64,7 +100,7 @@ export default function CalendarScreen() {
         <ThemedText themeColor="textSecondary">Lessons, due dates and school events for {child?.firstName}.</ThemedText>
       </View>
 
-      <Chips
+      <Segmented
         options={[
           { value: 'month', label: 'Month' },
           { value: 'week', label: 'Week' },
@@ -75,14 +111,35 @@ export default function CalendarScreen() {
       />
 
       <View style={styles.monthNav}>
-        <Pressable onPress={() => shiftMonth(-1)} accessibilityLabel="Previous month" hitSlop={12}>
-          <ThemedText type="heading" themeColor="primary">‹</ThemedText>
+        <Pressable
+          onPress={() => shift(-1)}
+          accessibilityRole="button"
+          accessibilityLabel={`Previous ${unit}`}
+          hitSlop={8}
+          style={[styles.navButton, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
+          <ThemedText type="heading" themeColor="primary">
+            ‹
+          </ThemedText>
         </Pressable>
-        <ThemedText type="heading">
-          {monthDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-        </ThemedText>
-        <Pressable onPress={() => shiftMonth(1)} accessibilityLabel="Next month" hitSlop={12}>
-          <ThemedText type="heading" themeColor="primary">›</ThemedText>
+        <View style={styles.navTitle}>
+          <ThemedText type="heading" style={styles.center}>
+            {heading}
+          </ThemedText>
+          {selected !== today && (
+            <Pressable onPress={() => setSelected(today)} accessibilityRole="button" hitSlop={8}>
+              <ThemedText type="link">Jump to today</ThemedText>
+            </Pressable>
+          )}
+        </View>
+        <Pressable
+          onPress={() => shift(1)}
+          accessibilityRole="button"
+          accessibilityLabel={`Next ${unit}`}
+          hitSlop={8}
+          style={[styles.navButton, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
+          <ThemedText type="heading" themeColor="primary">
+            ›
+          </ThemedText>
         </Pressable>
       </View>
 
@@ -129,7 +186,7 @@ export default function CalendarScreen() {
           </Card>
           <DayEntries date={selected} entries={byDate.get(selected) ?? []} />
           <ThemedText type="caption" themeColor="textSecondary">
-            {data?.length ?? 0} entries this month
+            {data.length} {data.length === 1 ? 'entry' : 'entries'} this month
           </ThemedText>
         </>
       ) : mode === 'week' ? (
@@ -184,7 +241,17 @@ function EntryCard({ entry }: { entry: CalendarEntry }) {
 const styles = StyleSheet.create({
   gap: { gap: Spacing.two },
   flex: { flex: 1, gap: Spacing.one },
-  monthNav: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  monthNav: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: Spacing.two },
+  navButton: {
+    width: 44,
+    height: 44,
+    borderRadius: Radius.pill,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  navTitle: { flex: 1, alignItems: 'center', gap: Spacing.half },
+  center: { textAlign: 'center' },
   grid: { flexDirection: 'row', flexWrap: 'wrap' },
   cellLabel: { width: `${100 / 7}%`, textAlign: 'center', paddingBottom: Spacing.two },
   cell: {

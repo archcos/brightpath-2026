@@ -6,7 +6,6 @@ import { ThemedText } from '@/components/themed-text';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Chips } from '@/components/ui/chips';
 import { ListRow } from '@/components/ui/list-row';
 import { ErrorState, Loading } from '@/components/ui/query-state';
 import { Screen } from '@/components/ui/screen';
@@ -17,7 +16,7 @@ import { useSchools, useSetPermissions, useSuperUpdateUser, useSuperUser } from 
 import { useTheme } from '@/hooks/use-theme';
 import type { Permission, Role, SuperUserDetail, UserStatus } from '@/types/api';
 import { confirmDestructive } from '@/utils/confirm';
-import { PERMISSION_LABEL, ROLE_LABEL, STATUS_TONE } from '@/utils/roles';
+import { PERMISSION_LABEL, ROLE_LABEL, roleOptions, STATUS_OPTIONS, STATUS_TONE } from '@/utils/roles';
 
 const SCHOOL_ROLES: Role[] = ['teacher', 'admin'];
 
@@ -99,14 +98,9 @@ function UserEditor({ data }: { data: SuperUserDetail }) {
           </ThemedText>
         ) : (
           <>
-            <ThemedText type="smallBold">Role</ThemedText>
-            <Chips<Role>
-              options={[
-                { value: 'parent', label: 'Parent' },
-                { value: 'teacher', label: 'Teacher' },
-                { value: 'admin', label: 'School admin' },
-                { value: 'super_admin', label: 'Super admin' },
-              ]}
+            <Select<Role>
+              label="Role"
+              options={roleOptions<Role>(['parent', 'teacher', 'admin', 'super_admin'])}
               value={role}
               onChange={setRole}
             />
@@ -122,16 +116,7 @@ function UserEditor({ data }: { data: SuperUserDetail }) {
                 onChange={setSchoolId}
               />
             )}
-            <ThemedText type="smallBold">Status</ThemedText>
-            <Chips<UserStatus>
-              options={[
-                { value: 'active', label: 'Active' },
-                { value: 'pending', label: 'Pending' },
-                { value: 'disabled', label: 'Disabled' },
-              ]}
-              value={status}
-              onChange={setStatus}
-            />
+            <Select<UserStatus> label="Status" options={STATUS_OPTIONS} value={status} onChange={setStatus} />
             <ThemedText type="caption" themeColor="textSecondary">
               Accounts are never deleted — disable them instead.
             </ThemedText>

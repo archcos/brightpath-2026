@@ -7,8 +7,9 @@ import { Select } from '@/components/ui/select';
 import { Screen } from '@/components/ui/screen';
 import { TextField } from '@/components/ui/text-field';
 import { useCreateStudent, useSections } from '@/hooks/admin-queries';
-import { ApiError } from '@/services/api';
+import { errorMessage } from '@/services/api';
 import type { AdminStudent } from '@/types/api';
+import { isValidISODate, maskDate } from '@/utils/format';
 
 export default function NewStudentScreen() {
   const sections = useSections();
@@ -38,7 +39,7 @@ export default function NewStudentScreen() {
       setLastName('');
       setBirthDate('');
     } catch (e) {
-      setError(e instanceof ApiError && e.details ? e.details.map((d) => d.message).join('\n') : (e as Error).message);
+      setError(errorMessage(e));
     }
   };
 
@@ -69,7 +70,15 @@ export default function NewStudentScreen() {
       />
       <TextField label="First name" value={firstName} onChangeText={setFirstName} maxLength={80} />
       <TextField label="Last name" value={lastName} onChangeText={setLastName} maxLength={80} />
-      <TextField label="Birth date" placeholder="YYYY-MM-DD" value={birthDate} onChangeText={setBirthDate} maxLength={10} />
+      <TextField
+        label="Birth date"
+        placeholder="YYYY-MM-DD"
+        value={birthDate}
+        onChangeText={(t) => setBirthDate(maskDate(t))}
+        keyboardType="number-pad"
+        maxLength={10}
+        error={birthDate.length === 10 && !isValidISODate(birthDate) ? 'Enter a real date, e.g. 2018-11-02' : undefined}
+      />
       {error && (
         <ThemedText type="small" themeColor="danger">
           {error}
@@ -79,7 +88,7 @@ export default function NewStudentScreen() {
         label="Add student"
         onPress={submit}
         loading={create.isPending}
-        disabled={!section || !firstName.trim() || !lastName.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(birthDate.trim())}
+        disabled={!section || !firstName.trim() || !lastName.trim() || !isValidISODate(birthDate)}
       />
     </Screen>
   );

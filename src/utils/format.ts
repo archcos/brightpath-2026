@@ -13,6 +13,28 @@ export function toISODate(date: Date): string {
   return `${date.getFullYear()}-${p(date.getMonth() + 1)}-${p(date.getDate())}`;
 }
 
+/** "1 student", "3 students". */
+export const plural = (n: number, word: string, many = `${word}s`) => `${n} ${n === 1 ? word : many}`;
+
+/** Formats typed digits as YYYY-MM-DD while the user types, so they never have to enter the dashes. */
+export function maskDate(text: string): string {
+  const digits = text.replace(/\D/g, '').slice(0, 8);
+  return [digits.slice(0, 4), digits.slice(4, 6), digits.slice(6, 8)].filter(Boolean).join('-');
+}
+
+/** "brp123456" or "123456" → "BRP-123456" as the parent types (and still lets them backspace to empty). */
+export function maskStudentCode(text: string): string {
+  const digits = text.replace(/^\s*brp-?/i, '').replace(/\D/g, '').slice(0, 6);
+  if (!digits) return text.toUpperCase().replace(/[^BRP-]/g, '').slice(0, 4);
+  return `BRP-${digits}`;
+}
+
+/** True for a real calendar date in YYYY-MM-DD form (rejects e.g. 2018-02-31). */
+export function isValidISODate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  return toISODate(parseDate(value)) === value;
+}
+
 const dayDiff = (value: string) => {
   const today = new Date();
   today.setHours(0, 0, 0, 0);

@@ -3,13 +3,13 @@ import { useState } from 'react';
 
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
-import { Chips } from '@/components/ui/chips';
 import { Screen } from '@/components/ui/screen';
 import { Select } from '@/components/ui/select';
 import { TextField } from '@/components/ui/text-field';
 import { useSchools, useSuperCreateUser } from '@/hooks/super-queries';
-import { ApiError } from '@/services/api';
+import { errorMessage } from '@/services/api';
 import type { Role } from '@/types/api';
+import { roleOptions } from '@/utils/roles';
 
 // Same rule as the server: no '@', so login can tell usernames from emails.
 const USERNAME = /^[a-z0-9._]{3,30}$/;
@@ -41,20 +41,15 @@ export default function SuperNewUserScreen() {
       });
       router.replace({ pathname: '/super/user/[id]', params: { id: String(user.id) } });
     } catch (e) {
-      setError(e instanceof ApiError && e.details ? e.details.map((d) => d.message).join('\n') : (e as Error).message);
+      setError(errorMessage(e));
     }
   };
 
   return (
     <Screen>
-      <ThemedText type="smallBold">Role</ThemedText>
-      <Chips<Role>
-        options={[
-          { value: 'admin', label: 'School admin' },
-          { value: 'teacher', label: 'Teacher' },
-          { value: 'parent', label: 'Parent' },
-          { value: 'super_admin', label: 'Super admin' },
-        ]}
+      <Select<Role>
+        label="Role"
+        options={roleOptions<Role>(['admin', 'teacher', 'parent', 'super_admin'])}
         value={role}
         onChange={setRole}
       />

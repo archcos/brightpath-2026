@@ -1,25 +1,34 @@
 import { useQuery } from '@tanstack/react-query';
+import { router } from 'expo-router';
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, StyleSheet } from 'react-native';
+import { StyleSheet } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
-import { Chips } from '@/components/ui/chips';
+import { Card } from '@/components/ui/card';
 import { Screen } from '@/components/ui/screen';
-import { Select } from '@/components/ui/select';
+import { Select, type SelectOption } from '@/components/ui/select';
 import { TextField } from '@/components/ui/text-field';
+import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth-context';
-import { ApiError } from '@/services/api';
+import { errorMessage } from '@/services/api';
 import { publicApi, type AccountType } from '@/services/brightpath';
 
 // Same rule as the server: no '@', so login can tell usernames from emails.
 const USERNAME = /^[a-z0-9._]{3,30}$/;
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const HINT: Record<AccountType, string> = {
   parent: 'After signing up, connect your child using the student code from their school.',
   teacher: "Teacher accounts need approval. Your school's admin will review your account and assign your classes.",
   admin: 'School admin accounts need approval from a BrightPath super admin before you can manage your school.',
 };
+
+const ACCOUNT_TYPES: SelectOption<AccountType>[] = [
+  { value: 'parent', label: 'Parent / Guardian', description: "Follow your child's lessons and schoolwork" },
+  { value: 'teacher', label: 'Teacher', description: 'Post lesson summaries and activities (needs approval)' },
+  { value: 'admin', label: 'School admin', description: "Manage your school's accounts (needs approval)" },
+];
 
 export default function SignUpScreen() {
   const { signUp } = useAuth();
@@ -37,8 +46,17 @@ export default function SignUpScreen() {
   const passwordError = password && password.length < 8 ? 'At least 8 characters' : undefined;
   const usernameError =
     username && !USERNAME.test(username.trim().toLowerCase()) ? '3–30 letters, numbers, dots or underscores' : undefined;
+  const emailError = email.trim() && !EMAIL.test(email.trim()) ? 'Enter a valid email address' : undefined;
+  const canSubmit =
+    !!name.trim() &&
+    EMAIL.test(email.trim()) &&
+    USERNAME.test(username.trim().toLowerCase()) &&
+    password.length >= 8 &&
+    (!needsSchool || !!schoolId) &&
+    !loading;
 
   const submit = async () => {
+    if (!canSubmit) return;
     setError(undefined);
     setLoading(true);
     try {
@@ -51,26 +69,24 @@ export default function SignUpScreen() {
         schoolId: needsSchool ? Number(schoolId) : undefined,
       });
     } catch (e) {
-      setError(e instanceof ApiError && e.details ? e.details.map((d) => d.message).join('\n') : (e as Error).message);
+      setError(errorMessage(e));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <Screen>
-        <ThemedText type="smallBold">I am a…</ThemedText>
-        <Chips<AccountType>
-          options={[
-            { value: 'parent', label: 'Parent / Guardian' },
-            { value: 'teacher', label: 'Teacher' },
-            { value: 'admin', label: 'School admin' },
-          ]}
+    <Screen>
+      <Card style={styles.card}>
+        <Select<AccountType>
+          label="I am a…"
+          options={ACCOUNT_TYPES}
           value={accountType}
           onChange={setAccountType}
         />
-        <ThemedText themeColor="textSecondary">{HINT[accountType]}</ThemedText>
+        <ThemedText type="small" themeColor="textSecondary">
+          {HINT[accountType]}
+        </ThemedText>
         {needsSchool && (
           <Select
             label="School"
@@ -90,6 +106,7 @@ export default function SignUpScreen() {
           autoComplete="email"
           keyboardType="email-address"
           textContentType="emailAddress"
+          error={emailError}
         />
         <TextField
           label="Username"
@@ -104,27 +121,31 @@ export default function SignUpScreen() {
         />
         <TextField
           label="Password"
+          placeholder="At least 8 characters"
           value={password}
           onChangeText={setPassword}
           secureTextEntry
           autoComplete="new-password"
           textContentType="newPassword"
+          maxLength={72}
           error={passwordError}
+          returnKeyType="go"
+          onSubmitEditing={submit}
         />
         {error && (
           <ThemedText type="small" themeColor="danger" accessibilityLiveRegion="polite">
             {error}
           </ThemedText>
         )}
-        <Button
-          label="Create account"
-          onPress={submit}
-          loading={loading}
-          disabled={!name || !email || !USERNAME.test(username.trim().toLowerCase()) || password.length < 8 || (needsSchool && !schoolId)}
-        />
-      </Screen>
-    </KeyboardAvoidingView>
+        <Button label="Create account" onPress={submit} loading={loading} disabled={!canSubmit} />
+      </Card>
+      <Button
+        variant="ghost"
+        label="Already have an account? Sign in"
+        onPress={() => (router.canGoBack() ? router.back() : router.replace('/sign-in'))}
+      />
+    </Screen>
   );
 }
 
-const styles = StyleSheet.create({ flex: { flex: 1 } });
+const styles = StyleSheet.create({ card: { gap: Spacing.three, padding: Spacing.four } });

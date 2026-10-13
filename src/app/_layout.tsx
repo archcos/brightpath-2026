@@ -1,30 +1,45 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { focusManager, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
+import * as SystemUI from 'expo-system-ui';
 import { useEffect, useState } from 'react';
+import { AppState, Platform, StyleSheet, View } from 'react-native';
 
+import { ThemedText } from '@/components/themed-text';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Screen } from '@/components/ui/screen';
+import { Spacing } from '@/constants/theme';
 import { AuthProvider, useAuth } from '@/context/auth-context';
 import { ChildProvider } from '@/context/child-context';
-import { SettingsProvider } from '@/context/settings-context';
+import { SettingsProvider, useSettings } from '@/context/settings-context';
 import { useColorMode, useTheme } from '@/hooks/use-theme';
-import { ApiError } from '@/services/api';
+import { API_ORIGIN, ApiError } from '@/services/api';
 
 SplashScreen.preventAutoHideAsync();
+
+// Don't retry requests the server has definitively rejected, or ones dropped because the user signed out.
+const shouldRetry = (count: number, error: Error) =>
+  !(error instanceof ApiError && ((error.status >= 400 && error.status < 500) || error.code === 'stale_session')) &&
+  count < 2;
 
 export default function RootLayout() {
   const [queryClient] = useState(
     () =>
       new QueryClient({
         defaultOptions: {
-          queries: {
-            staleTime: 30_000,
-            // Don't retry requests the server has definitively rejected.
-            retry: (count, error) => !(error instanceof ApiError && error.status >= 400 && error.status < 500) && count < 2,
-          },
+          queries: { staleTime: 30_000, retry: shouldRetry },
         },
       }),
   );
+
+  // React Query refetches stale data on window focus; on native, "focus" is the app returning to the foreground.
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    const sub = AppState.addEventListener('change', (state) => focusManager.setFocused(state === 'active'));
+    return () => sub.remove();
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -40,11 +55,13 @@ export default function RootLayout() {
 }
 
 function RootNavigator() {
-  const { isLoading, user } = useAuth();
+  const { isLoading, user, connectionError } = useAuth();
+  const { settings } = useSettings();
   const mode = useColorMode();
   const theme = useTheme();
   const signedIn = !!user;
-  const active = user?.status === 'active';
+  // Teachers and school admins of a deactivated school are treated like pending accounts (the server blocks them too).
+  const active = user?.status === 'active' && user.school?.active !== false;
   // Each role only has its own screens mounted; the server enforces the same rules on every request.
   const isParent = active && user.role === 'parent';
   const isTeacher = active && user.role === 'teacher';
@@ -55,7 +72,19 @@ function RootNavigator() {
     if (!isLoading) SplashScreen.hideAsync();
   }, [isLoading]);
 
-  if (isLoading) return null;
+  // The root view (native) / page body (web) shows through during screen transitions.
+  // Keep it on the theme background so dark mode never flashes white.
+  useEffect(() => {
+    SystemUI.setBackgroundColorAsync(theme.background);
+    if (Platform.OS === 'web') {
+      document.documentElement.style.backgroundColor = theme.background;
+      document.body.style.backgroundColor = theme.background;
+      document.documentElement.style.colorScheme = mode;
+    }
+  }, [theme.background, mode]);
+
+  if (isLoading) return <View style={[styles.fill, { backgroundColor: theme.background }]} />;
+  if (connectionError && !signedIn) return <ConnectionErrorScreen message={connectionError} />;
 
   const navTheme = mode === 'dark' ? DarkTheme : DefaultTheme;
   return (
@@ -65,7 +94,19 @@ function RootNavigator() {
         colors: { ...navTheme.colors, background: theme.background, card: theme.background, primary: theme.primary, text: theme.text },
       }}>
       <StatusBar style={mode === 'dark' ? 'light' : 'dark'} />
-      <Stack screenOptions={{ headerBackButtonDisplayMode: 'minimal', headerShadowVisible: false, headerTintColor: theme.primary }}>
+      <View style={[styles.fill, { backgroundColor: theme.background }]}>
+      <Stack
+        screenOptions={{
+          headerBackButtonDisplayMode: 'minimal',
+          headerShadowVisible: false,
+          headerTintColor: theme.primary,
+          headerStyle: { backgroundColor: theme.background },
+          headerTitleStyle: { color: theme.text },
+          // Every screen (including loading states) sits on the theme color, never the default white.
+          contentStyle: { backgroundColor: theme.background },
+          // "Reduce Animations" in Settings turns off slide/fade transitions.
+          animation: settings.reduceMotion ? 'none' : 'default',
+        }}>
         <Stack.Protected guard={!signedIn}>
           <Stack.Screen name="sign-in" options={{ headerShown: false }} />
           <Stack.Screen name="sign-up" options={{ title: 'Create account' }} />
@@ -79,7 +120,6 @@ function RootNavigator() {
           <Stack.Screen name="notification-settings" options={{ title: 'Notification Settings' }} />
           <Stack.Screen name="weekly" options={{ title: 'Weekly Summary' }} />
           <Stack.Screen name="saved" options={{ title: 'Saved' }} />
-          <Stack.Screen name="pendant" options={{ title: 'Teacher Pendant' }} />
           <Stack.Screen name="connect-child" options={{ title: 'Connect a Child', presentation: 'modal' }} />
           <Stack.Screen name="student" options={{ headerShown: false, gestureEnabled: false }} />
         </Stack.Protected>
@@ -111,6 +151,57 @@ function RootNavigator() {
           <Stack.Screen name="settings" options={{ title: 'Settings' }} />
         </Stack.Protected>
       </Stack>
+      </View>
     </ThemeProvider>
   );
 }
+
+/** Shown when a saved session couldn't be checked because the server is unreachable. The session is kept. */
+function ConnectionErrorScreen({ message }: { message: string }) {
+  const { retry, signOut } = useAuth();
+  const [retrying, setRetrying] = useState(false);
+  const mode = useColorMode();
+
+  const tryAgain = async () => {
+    setRetrying(true);
+    try {
+      await retry();
+    } finally {
+      setRetrying(false);
+    }
+  };
+
+  return (
+    <>
+      <StatusBar style={mode === 'dark' ? 'light' : 'dark'} />
+      <Screen tab>
+        <View style={styles.hero}>
+          <ThemedText style={styles.icon}>📡</ThemedText>
+          <ThemedText type="title" style={styles.center}>
+            Can&apos;t connect right now
+          </ThemedText>
+          <ThemedText themeColor="textSecondary" style={styles.center}>
+            {message} You&apos;re still signed in — we&apos;ll pick up where you left off once you&apos;re back online.
+          </ThemedText>
+        </View>
+        <Button label="Try again" onPress={tryAgain} loading={retrying} />
+        <Button variant="ghost" label="Sign out" onPress={signOut} />
+        {__DEV__ && (
+          <Card>
+            <ThemedText type="caption" themeColor="textSecondary">
+              Developer info: the app is calling {API_ORIGIN}. Make sure the API is running and reachable from this
+              device (set EXPO_PUBLIC_API_URL in app/.env to override).
+            </ThemedText>
+          </Card>
+        )}
+      </Screen>
+    </>
+  );
+}
+
+const styles = StyleSheet.create({
+  fill: { flex: 1 },
+  hero: { alignItems: 'center', gap: Spacing.two, marginTop: Spacing.six },
+  icon: { fontSize: 56, lineHeight: 68 },
+  center: { textAlign: 'center' },
+});

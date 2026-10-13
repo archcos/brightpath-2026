@@ -1,35 +1,55 @@
 import Constants from 'expo-constants';
-import { Alert, Platform, Switch } from 'react-native';
+import { Switch } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Chips } from '@/components/ui/chips';
+import { Segmented } from '@/components/ui/segmented';
 import { ListRow } from '@/components/ui/list-row';
 import { Screen } from '@/components/ui/screen';
+import { useAuth } from '@/context/auth-context';
 import { useSettings, type Settings } from '@/context/settings-context';
 import { useTheme } from '@/hooks/use-theme';
+import { confirmDestructive } from '@/utils/confirm';
+import { ROLE_LABEL } from '@/utils/roles';
 
 export default function SettingsScreen() {
   const theme = useTheme();
+  const { user, signOut } = useAuth();
   const { settings, update, reset } = useSettings();
 
-  const confirmReset = () => {
-    if (Platform.OS === 'web') return reset();
-    Alert.alert('Reset settings?', 'Theme and accessibility options return to their defaults.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Reset', style: 'destructive', onPress: reset },
-    ]);
+  const confirmReset = async () => {
+    if (await confirmDestructive('Reset settings?', 'Theme and accessibility options return to their defaults.', 'Reset')) {
+      reset();
+    }
+  };
+
+  const confirmSignOut = async () => {
+    if (await confirmDestructive('Sign out?', 'You will need your password to sign back in.', 'Sign out')) await signOut();
   };
 
   return (
     <Screen>
+      {user && (
+        <Card>
+          <ThemedText type="label" themeColor="textSecondary">
+            Account
+          </ThemedText>
+          <ListRow
+            icon={user.avatar}
+            title={user.displayName}
+            subtitle={`@${user.username} • ${user.email}\n${ROLE_LABEL[user.role]}${user.school ? ` • ${user.school.name}` : ''}`}
+          />
+          <Button small variant="ghost" label="Sign out of this device" onPress={confirmSignOut} />
+        </Card>
+      )}
+
       <Card>
         <ThemedText type="label" themeColor="textSecondary">
           Appearance
         </ThemedText>
         <ThemedText type="smallBold">Theme</ThemedText>
-        <Chips<Settings['theme']>
+        <Segmented<Settings['theme']>
           options={[
             { value: 'system', label: 'System' },
             { value: 'light', label: 'Light' },
@@ -45,7 +65,7 @@ export default function SettingsScreen() {
           Accessibility
         </ThemedText>
         <ThemedText type="smallBold">Text Size</ThemedText>
-        <Chips<Settings['textSize']>
+        <Segmented<Settings['textSize']>
           options={[
             { value: 'small', label: 'Small' },
             { value: 'default', label: 'Default' },

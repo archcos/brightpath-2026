@@ -47,7 +47,9 @@ export function TextField({ label, error, secureTextEntry, ...props }: TextInput
 const styles = StyleSheet.create({
   field: { gap: Spacing.one },
   box: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: Radius.md },
-  input: { flex: 1, minHeight: 48, paddingHorizontal: Spacing.three, fontSize: 16 },
+  // minWidth 0: on web an <input> otherwise keeps its intrinsic ~200px width, so side-by-side fields
+  // (e.g. Date / Start time / Minutes) overflow narrow screens and the whole form scrolls sideways.
+  input: { flex: 1, minWidth: 0, minHeight: 48, paddingHorizontal: Spacing.three, fontSize: 16 },
   multiline: { minHeight: 110, paddingTop: Spacing.three, paddingBottom: Spacing.three, textAlignVertical: 'top' },
   eye: { paddingHorizontal: Spacing.three, minHeight: 48, justifyContent: 'center' },
   eyeIcon: { fontSize: 18, lineHeight: 22 },

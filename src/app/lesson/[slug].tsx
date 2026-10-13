@@ -40,6 +40,8 @@ export default function LessonScreen() {
               hitSlop={12}
               accessibilityRole="button"
               accessibilityLabel={lesson.saved ? 'Remove from saved' : 'Save lesson'}
+              accessibilityState={{ busy: toggleSaved.isPending }}
+              disabled={toggleSaved.isPending}
               onPress={() => toggleSaved.mutate({ type: 'lesson', itemId: lesson.id, saved: lesson.saved })}>
               <ThemedText style={styles.headerIcon}>{lesson.saved ? '🔖' : '📑'}</ThemedText>
             </Pressable>
@@ -98,8 +100,9 @@ export default function LessonScreen() {
                 <Pressable
                   key={w.id}
                   accessibilityRole="button"
-                  accessibilityState={{ selected: w.saved }}
+                  accessibilityState={{ selected: w.saved, disabled: toggleSaved.isPending }}
                   accessibilityLabel={`${w.word}${w.saved ? ', saved' : ''}`}
+                  disabled={toggleSaved.isPending}
                   onPress={() => toggleSaved.mutate({ type: 'word', itemId: w.id, saved: w.saved })}
                   style={[
                     styles.word,

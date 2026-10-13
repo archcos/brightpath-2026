@@ -61,6 +61,10 @@ export const authApi = {
     schoolId?: number;
   }) =>
     api<AuthResponse>('/auth/register', { method: 'POST', json: input }),
+  /** Revokes this device's session on the server. */
+  logout: () => api<void>('/auth/logout', { method: 'POST' }),
+  /** Renews the current session and returns a token with a later expiry. */
+  refresh: () => api<{ token: string }>('/auth/refresh', { method: 'POST' }),
 };
 
 export const publicApi = {
@@ -82,7 +86,6 @@ export const childApi = {
   overview: (id: number) => api<Overview>(`${child(id)}/overview`),
   weekly: (id: number) => api<Weekly>(`${child(id)}/weekly`),
   calendar: (id: number, month: string) => api<{ month: string; entries: CalendarEntry[] }>(`${child(id)}/calendar${qs({ month })}`),
-  pendant: (id: number) => api<{ pendant: Pendant }>(`${child(id)}/pendant`),
 
   lessons: (id: number, filters: { subject?: string; range?: LessonRange }) =>
     api<{ lessons: Lesson[] }>(`${child(id)}/lessons${qs(filters)}`),
@@ -110,6 +113,8 @@ export const childApi = {
 
 export const teacherApi = {
   classes: () => api<{ classes: ClassAssignment[] }>('/teacher/classes'),
+  /** The pendant this teacher wears, or null. */
+  pendant: () => api<{ pendant: Pendant | null }>('/teacher/pendant'),
   lessons: () => api<{ lessons: TeacherLesson[] }>('/teacher/lessons'),
   lesson: (id: number) => api<{ lesson: TeacherLessonDetail }>(`/teacher/lessons/${id}`),
   createLesson: (input: LessonInput) => api<{ lesson: TeacherLessonDetail }>('/teacher/lessons', { method: 'POST', json: input }),
@@ -136,6 +141,12 @@ export const adminApi = {
     api<AdminUserDetail>(`/admin/users/${id}`, { method: 'PATCH', json: patch }),
   setAssignments: (id: number, assignments: { sectionId: number; subjectId: number }[]) =>
     api<AdminUserDetail>(`/admin/users/${id}/assignments`, { method: 'PUT', json: { assignments } }),
+  /** Give a teacher a pendant from the pool, or take theirs back with null. */
+  assignPendant: (userId: number, pendantId: number | null) =>
+    api<AdminUserDetail>(`/admin/users/${userId}/pendant`, { method: 'PUT', json: { pendantId } }),
+  pendants: () => api<{ pendants: Pendant[] }>('/admin/pendants'),
+  registerPendant: (code: string) => api<{ pendant: Pendant }>('/admin/pendants', { method: 'POST', json: { code } }),
+  takeBackPendant: (id: number) => api<{ pendant: Pendant }>(`/admin/pendants/${id}/take-back`, { method: 'POST' }),
   sections: () => api<{ sections: Section[] }>('/admin/sections'),
   createSection: (input: { grade: number; name: string; schoolYear: string }) =>
     api<{ section: Section }>('/admin/sections', { method: 'POST', json: input }),

@@ -2,32 +2,37 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
+import { PendantStatus } from '@/components/pendant-status';
 import { StaffHeader } from '@/components/staff-header';
 import { ThemedText } from '@/components/themed-text';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Chips } from '@/components/ui/chips';
+import { Segmented } from '@/components/ui/segmented';
 import { EmptyState, ErrorState, Loading } from '@/components/ui/query-state';
 import { Screen } from '@/components/ui/screen';
-import { Select } from '@/components/ui/select';
+import { FilterRow, Select } from '@/components/ui/select';
 import { TextField } from '@/components/ui/text-field';
 import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth-context';
+import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import {
   useAdminUsers,
   useCreateSection,
+  usePendants,
+  useRegisterPendant,
   useSections,
   useStudents,
+  useTakeBackPendant,
   useUpdateSection,
   useUpdateStudent,
 } from '@/hooks/admin-queries';
-import type { AdminStudent, Permissions } from '@/types/api';
+import type { AdminStudent, Pendant, Permissions } from '@/types/api';
 import { confirmDestructive } from '@/utils/confirm';
-import { formatMonthDay } from '@/utils/format';
+import { formatMonthDay, plural } from '@/utils/format';
 import { currentSchoolYear, ROLE_LABEL, STATUS_TONE } from '@/utils/roles';
 
-type Tab = 'users' | 'students' | 'sections';
+type Tab = 'users' | 'students' | 'sections' | 'pendants';
 type UserFilter = 'pending' | 'all' | 'teacher' | 'parent' | 'admin';
 
 const NO_PERMISSIONS: Permissions = {
@@ -44,17 +49,29 @@ export default function AdminHome() {
 
   return (
     <Screen tab>
-      <StaffHeader title={user?.school?.name ?? 'School Admin'} subtitle="Manage your school's accounts, students and sections." />
-      <Chips<Tab>
+      <StaffHeader
+        title={user?.school?.name ?? 'School Admin'}
+        subtitle="Manage your school's accounts, students, sections and recording pendants."
+      />
+      <Segmented<Tab>
         options={[
           { value: 'users', label: 'Users' },
           { value: 'students', label: 'Students' },
           { value: 'sections', label: 'Sections' },
+          { value: 'pendants', label: 'Pendants' },
         ]}
         value={tab}
         onChange={setTab}
       />
-      {tab === 'users' ? <UsersTab perms={perms} /> : tab === 'students' ? <StudentsTab perms={perms} /> : <SectionsTab perms={perms} />}
+      {tab === 'users' ? (
+        <UsersTab perms={perms} />
+      ) : tab === 'students' ? (
+        <StudentsTab perms={perms} />
+      ) : tab === 'sections' ? (
+        <SectionsTab perms={perms} />
+      ) : (
+        <PendantsTab perms={perms} />
+      )}
     </Screen>
   );
 }
@@ -70,28 +87,30 @@ function ReadOnlyNote({ what }: { what: string }) {
 function UsersTab({ perms }: { perms: Permissions }) {
   const [filter, setFilter] = useState<UserFilter>('pending');
   const [q, setQ] = useState('');
+  const search = useDebouncedValue(q.trim());
   const { data, isLoading, error, refetch } = useAdminUsers({
     status: filter === 'pending' ? 'pending' : undefined,
     role: filter === 'pending' || filter === 'all' ? undefined : filter,
-    q: q.trim() || undefined,
+    q: search || undefined,
   });
   const canCreate = perms.manage_teachers || perms.manage_parents;
 
   return (
     <View style={styles.gap}>
       {canCreate && <Button label="+ New teacher or parent" onPress={() => router.push('/admin/new-user')} />}
-      <Chips<UserFilter>
+      <Select<UserFilter>
+        label="Show"
         options={[
-          { value: 'pending', label: 'Pending approval' },
-          { value: 'all', label: 'All' },
+          { value: 'pending', label: 'Waiting for approval' },
+          { value: 'all', label: 'All users' },
           { value: 'teacher', label: 'Teachers' },
           { value: 'parent', label: 'Parents' },
-          { value: 'admin', label: 'Admins' },
+          { value: 'admin', label: 'School admins' },
         ]}
         value={filter}
         onChange={setFilter}
       />
-      <TextField label="Search" placeholder="Name or email" value={q} onChangeText={setQ} autoCapitalize="none" />
+      <TextField label="Search" placeholder="Name, username or email" value={q} onChangeText={setQ} autoCapitalize="none" />
       {isLoading ? (
         <Loading />
       ) : error || !data ? (
@@ -151,26 +170,31 @@ function StudentsTab({ perms }: { perms: Permissions }) {
       ) : (
         <ReadOnlyNote what="students" />
       )}
-      <Chips<AdminStudent['status']>
-        options={[
-          { value: 'active', label: 'Active' },
-          { value: 'inactive', label: 'Inactive' },
-        ]}
-        value={status}
-        onChange={setStatus}
-      />
-      <Select
-        label="Section"
-        searchPlaceholder="Search grade, section or year"
-        options={[
-          { value: 'all', label: 'All sections' },
-          ...(sections.data ?? [])
-            .filter((s) => s.status === 'active')
-            .map((s) => ({ value: String(s.id), label: `Grade ${s.grade} • ${s.name}`, description: `School year ${s.schoolYear}` })),
-        ]}
-        value={sectionId}
-        onChange={setSectionId}
-      />
+      <FilterRow>
+        <Select
+          compact
+          label="Section"
+          searchPlaceholder="Search grade, section or year"
+          options={[
+            { value: 'all', label: 'All sections' },
+            ...(sections.data ?? [])
+              .filter((s) => s.status === 'active')
+              .map((s) => ({ value: String(s.id), label: `Grade ${s.grade} • ${s.name}`, description: `School year ${s.schoolYear}` })),
+          ]}
+          value={sectionId}
+          onChange={setSectionId}
+        />
+        <Select<AdminStudent['status']>
+          compact
+          label="Status"
+          options={[
+            { value: 'active', label: 'Active' },
+            { value: 'inactive', label: 'Inactive' },
+          ]}
+          value={status}
+          onChange={setStatus}
+        />
+      </FilterRow>
       {update.error && (
         <ThemedText type="caption" themeColor="danger">
           {update.error.message}
@@ -228,9 +252,13 @@ function SectionsTab({ perms }: { perms: Permissions }) {
   const [schoolYear, setSchoolYear] = useState(currentSchoolYear());
 
   const add = async () => {
-    await create.mutateAsync({ grade: Number(grade), name: name.trim(), schoolYear: schoolYear.trim() });
-    setGrade('');
-    setName('');
+    try {
+      await create.mutateAsync({ grade: Number(grade), name: name.trim(), schoolYear: schoolYear.trim() });
+      setGrade('');
+      setName('');
+    } catch {
+      // Shown below via create.error.
+    }
   };
 
   const toggle = async (id: number, archived: boolean, label: string) => {
@@ -255,6 +283,11 @@ function SectionsTab({ perms }: { perms: Permissions }) {
         <Loading />
       ) : error || !data ? (
         <ErrorState error={error} onRetry={refetch} />
+      ) : years.length === 0 ? (
+        <EmptyState
+          title="No sections yet"
+          message={perms.manage_sections ? 'Add your first section below.' : 'A school admin with permission can add sections.'}
+        />
       ) : (
         years.map((year) => (
           <View key={year} style={styles.gap}>
@@ -269,7 +302,7 @@ function SectionsTab({ perms }: { perms: Permissions }) {
                     <View style={styles.flex}>
                       <ThemedText type="smallBold">{label}</ThemedText>
                       <ThemedText type="caption" themeColor="textSecondary">
-                        Adviser: {s.adviser ?? '—'} • {s.students} active students
+                        Adviser: {s.adviser ?? '—'} • {plural(s.students, 'active student')}
                       </ThemedText>
                     </View>
                     <View style={styles.badges}>
@@ -312,6 +345,112 @@ function SectionsTab({ perms }: { perms: Permissions }) {
             loading={create.isPending}
             disabled={!grade || !name.trim() || !/^\d{4}-\d{4}$/.test(schoolYear.trim())}
           />
+        </Card>
+      )}
+    </View>
+  );
+}
+
+/** The school's recording pendants: who wears each one, its status, and registering new ones. */
+function PendantsTab({ perms }: { perms: Permissions }) {
+  const { data, isLoading, error, refetch } = usePendants();
+  const register = useRegisterPendant();
+  const takeBack = useTakeBackPendant();
+  const [code, setCode] = useState('');
+  const canManage = perms.manage_teachers;
+  const available = (data ?? []).filter((p) => !p.teacher).length;
+
+  const add = async () => {
+    try {
+      await register.mutateAsync(code.trim().toUpperCase());
+      setCode('');
+    } catch {
+      // Shown below via register.error.
+    }
+  };
+
+  const confirmTakeBack = async (p: Pendant) => {
+    if (
+      await confirmDestructive(
+        `Take back ${p.code}?`,
+        `${p.teacher?.name ?? 'The teacher'} will no longer have a pendant until you give them one again.`,
+        'Take back',
+      )
+    ) {
+      takeBack.mutate(p.id);
+    }
+  };
+
+  return (
+    <View style={styles.gap}>
+      <ThemedText type="small" themeColor="textSecondary">
+        Each teacher wears one pendant to record their lessons. Give a teacher a pendant from their user page.
+        Parents never see pendants.
+      </ThemedText>
+      {!canManage && <ReadOnlyNote what="pendants" />}
+      {takeBack.error && (
+        <ThemedText type="caption" themeColor="danger">
+          {takeBack.error.message}
+        </ThemedText>
+      )}
+      {isLoading ? (
+        <Loading />
+      ) : error || !data ? (
+        <ErrorState error={error} onRetry={refetch} />
+      ) : data.length === 0 ? (
+        <EmptyState title="No pendants yet" message={canManage ? 'Register your first pendant below.' : undefined} />
+      ) : (
+        <>
+          <ThemedText type="caption" themeColor="textSecondary">
+            {plural(data.length, 'pendant')} • {available} available
+          </ThemedText>
+          {data.map((p) => (
+            <Card key={p.id}>
+              <PendantStatus pendant={p} />
+              <View style={styles.row}>
+                <ThemedText type="small" style={styles.flex}>
+                  {p.teacher ? `Worn by ${p.teacher.name}` : 'Available — not assigned to anyone'}
+                </ThemedText>
+                {p.teacher?.userId && (
+                  <Button
+                    small
+                    variant="secondary"
+                    label="Teacher"
+                    onPress={() => router.push({ pathname: '/admin/user/[id]', params: { id: String(p.teacher!.userId) } })}
+                  />
+                )}
+                {p.teacher && canManage && (
+                  <Button
+                    small
+                    variant="ghost"
+                    label="Take back"
+                    onPress={() => confirmTakeBack(p)}
+                    loading={takeBack.isPending && takeBack.variables === p.id}
+                  />
+                )}
+              </View>
+            </Card>
+          ))}
+        </>
+      )}
+      {canManage && (
+        <Card>
+          <ThemedText type="subtitle">Register a pendant</ThemedText>
+          <TextField
+            label="Pendant code"
+            placeholder="e.g. TP-004 (printed on the device)"
+            value={code}
+            onChangeText={setCode}
+            autoCapitalize="characters"
+            autoCorrect={false}
+            maxLength={20}
+          />
+          {register.error && (
+            <ThemedText type="caption" themeColor="danger">
+              {register.error.message}
+            </ThemedText>
+          )}
+          <Button label="Register pendant" onPress={add} loading={register.isPending} disabled={code.trim().length < 3} />
         </Card>
       )}
     </View>

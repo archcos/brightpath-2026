@@ -7,16 +7,17 @@ import { ThemedText } from '@/components/themed-text';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Chips } from '@/components/ui/chips';
+import { Segmented } from '@/components/ui/segmented';
 import { EmptyState, ErrorState, Loading } from '@/components/ui/query-state';
 import { Screen } from '@/components/ui/screen';
-import { Select } from '@/components/ui/select';
+import { FilterRow, Select } from '@/components/ui/select';
 import { TextField } from '@/components/ui/text-field';
 import { Spacing } from '@/constants/theme';
 import { useCreateSchool, useSchools, useSuperUsers, useUpdateSchool } from '@/hooks/super-queries';
+import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import type { Role, School, User, UserStatus } from '@/types/api';
 import { confirmDestructive } from '@/utils/confirm';
-import { formatMonthDay } from '@/utils/format';
+import { formatMonthDay, plural } from '@/utils/format';
 import { ROLE_LABEL, STATUS_TONE } from '@/utils/roles';
 
 type Tab = 'schools' | 'admins' | 'users';
@@ -26,7 +27,7 @@ export default function SuperHome() {
   return (
     <Screen tab>
       <StaffHeader title="BrightPath Admin" subtitle="Schools, school admins and permissions." />
-      <Chips<Tab>
+      <Segmented<Tab>
         options={[
           { value: 'admins', label: 'School admins' },
           { value: 'schools', label: 'Schools' },
@@ -68,12 +69,13 @@ function AdminsTab() {
   return (
     <View style={styles.gap}>
       <Button label="+ New account" onPress={() => router.push('/super/new-user')} />
-      <Chips<UserStatus | 'all'>
+      <Select<UserStatus | 'all'>
+        label="Show"
         options={[
-          { value: 'pending', label: 'Awaiting approval' },
+          { value: 'pending', label: 'Waiting for approval' },
           { value: 'active', label: 'Active' },
           { value: 'disabled', label: 'Disabled' },
-          { value: 'all', label: 'All' },
+          { value: 'all', label: 'All school admins' },
         ]}
         value={status}
         onChange={setStatus}
@@ -96,39 +98,45 @@ function UsersTab() {
   const [role, setRole] = useState<Role | 'all'>('all');
   const [schoolId, setSchoolId] = useState('all');
   const [q, setQ] = useState('');
+  const search = useDebouncedValue(q.trim());
   const { data, isLoading, error, refetch } = useSuperUsers({
     role: role === 'all' ? undefined : role,
     schoolId: schoolId === 'all' ? undefined : Number(schoolId),
-    q: q.trim() || undefined,
+    q: search || undefined,
   });
   return (
     <View style={styles.gap}>
-      <Chips<Role | 'all'>
-        options={[
-          { value: 'all', label: 'All roles' },
-          { value: 'super_admin', label: 'Super admins' },
-          { value: 'admin', label: 'School admins' },
-          { value: 'teacher', label: 'Teachers' },
-          { value: 'parent', label: 'Parents' },
-        ]}
-        value={role}
-        onChange={setRole}
-      />
-      <Select
-        label="School"
-        searchPlaceholder="Search schools"
-        options={[
-          { value: 'all', label: 'All schools' },
-          ...(schools.data ?? []).map((s) => ({
-            value: String(s.id),
-            label: s.name,
-            description: s.status === 'active' ? undefined : 'Inactive',
-          })),
-        ]}
-        value={schoolId}
-        onChange={setSchoolId}
-      />
-      <TextField label="Search" placeholder="Name or email" value={q} onChangeText={setQ} autoCapitalize="none" />
+      <FilterRow>
+        <Select<Role | 'all'>
+          compact
+          label="Role"
+          options={[
+            { value: 'all', label: 'All roles' },
+            { value: 'super_admin', label: 'Super admins' },
+            { value: 'admin', label: 'School admins' },
+            { value: 'teacher', label: 'Teachers' },
+            { value: 'parent', label: 'Parents' },
+          ]}
+          value={role}
+          onChange={setRole}
+        />
+        <Select
+          compact
+          label="School"
+          searchPlaceholder="Search schools"
+          options={[
+            { value: 'all', label: 'All schools' },
+            ...(schools.data ?? []).map((s) => ({
+              value: String(s.id),
+              label: s.name,
+              description: s.status === 'active' ? undefined : 'Inactive',
+            })),
+          ]}
+          value={schoolId}
+          onChange={setSchoolId}
+        />
+      </FilterRow>
+      <TextField label="Search" placeholder="Name, username or email" value={q} onChangeText={setQ} autoCapitalize="none" />
       {isLoading ? (
         <Loading />
       ) : error || !data ? (
@@ -164,8 +172,12 @@ function SchoolsTab() {
   };
 
   const add = async () => {
-    await create.mutateAsync(name.trim());
-    setName('');
+    try {
+      await create.mutateAsync(name.trim());
+      setName('');
+    } catch {
+      // Shown below via create.error.
+    }
   };
 
   return (
@@ -186,7 +198,7 @@ function SchoolsTab() {
               <View style={styles.flex}>
                 <ThemedText type="smallBold">{s.name}</ThemedText>
                 <ThemedText type="caption" themeColor="textSecondary">
-                  {s.admins} admin{s.admins === 1 ? '' : 's'} • {s.teachers} teachers • {s.students} students
+                  {plural(s.admins, 'admin')} • {plural(s.teachers, 'teacher')} • {plural(s.students, 'student')}
                 </ThemedText>
               </View>
               <View style={styles.badges}>

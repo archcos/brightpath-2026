@@ -5,17 +5,16 @@ import { StyleSheet, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Chips } from '@/components/ui/chips';
 import { ErrorState, Loading } from '@/components/ui/query-state';
 import { Screen } from '@/components/ui/screen';
 import { Select } from '@/components/ui/select';
 import { TextField } from '@/components/ui/text-field';
 import { Spacing } from '@/constants/theme';
 import { useArchiveLesson, useSaveLesson, useTeacherClasses, useTeacherLesson } from '@/hooks/teacher-queries';
-import { ApiError } from '@/services/api';
+import { ApiError, errorMessage } from '@/services/api';
 import type { ClassAssignment, LessonInput } from '@/types/api';
 import { confirmDestructive } from '@/utils/confirm';
-import { toISODate } from '@/utils/format';
+import { maskDate, plural, toISODate } from '@/utils/format';
 
 type Form = {
   classKey: string;
@@ -35,7 +34,33 @@ type Form = {
 // Return to the dashboard even when the editor was opened directly (e.g. by URL on web).
 const leave = () => (router.canGoBack() ? router.back() : router.replace('/teacher' as Href));
 
-const EMPTY: Form = {
+const FIELD_LABEL: Record<string, string> = {
+  sectionId: 'Class',
+  subjectId: 'Class',
+  title: 'Lesson title',
+  startsAt: 'Date & time',
+  durationMin: 'Minutes',
+  summary: 'What they learned',
+  rememberThis: 'Remember this',
+  askChild: 'Ask your child',
+  tryTogether: 'Try together',
+  keyPoints: 'Key learning points',
+  words: 'Important words',
+};
+
+/** Validation errors with readable field names ("Date & time: Use YYYY-MM-DD HH:MM"). */
+function fieldErrors(e: unknown) {
+  if (!(e instanceof ApiError && e.details)) return errorMessage(e);
+  return e.details
+    .map((d) => {
+      const field = FIELD_LABEL[d.field.split('.')[0]] ?? d.field;
+      return field ? `${field}: ${d.message}` : d.message;
+    })
+    .join('\n');
+}
+
+// A function so "today" is computed when the form opens, not when the module first loaded.
+const empty = (): Form => ({
   classKey: '',
   title: '',
   date: toISODate(new Date()),
@@ -48,7 +73,7 @@ const EMPTY: Form = {
   rememberThis: '',
   askChild: '',
   tryTogether: '',
-};
+});
 
 /** "🌱 Roots absorb water" → { emoji: '🌱', text: 'Roots absorb water' }. Lines without a leading emoji get ✅. */
 function parsePoints(text: string) {
@@ -67,10 +92,13 @@ function parsePoints(text: string) {
 export default function LessonEditor() {
   const { id: idParam } = useLocalSearchParams<{ id: string }>();
   const id = idParam === 'new' ? null : Number(idParam);
+  const invalidId = id !== null && !(Number.isInteger(id) && id > 0);
   const classes = useTeacherClasses();
-  const existing = useTeacherLesson(id);
+  const existing = useTeacherLesson(invalidId ? null : id);
 
+  if (invalidId) return <ErrorState error={new Error('This lesson link is not valid.')} />;
   if (classes.isLoading || (id && existing.isLoading)) return <Loading />;
+  if (classes.error) return <ErrorState error={classes.error} onRetry={classes.refetch} />;
   if (existing.error) return <ErrorState error={existing.error} onRetry={existing.refetch} />;
 
   const l = existing.data;
@@ -90,7 +118,7 @@ export default function LessonEditor() {
         askChild: l.askChild ?? '',
         tryTogether: l.tryTogether ?? '',
       }
-    : { ...EMPTY, classKey: first ? `${first.sectionId}:${first.subject.id}` : '' };
+    : { ...empty(), classKey: first ? `${first.sectionId}:${first.subject.id}` : '' };
 
   return (
     <LessonForm key={id ?? 'new'} id={id} initial={initial} classes={classes.data ?? []} archived={l?.archived ?? false} />
@@ -128,7 +156,7 @@ function LessonForm({ id, initial, classes, archived }: LessonFormProps) {
       await save.mutateAsync({ id, input });
       leave();
     } catch (e) {
-      setError(e instanceof ApiError && e.details ? e.details.map((d) => `${d.field}: ${d.message}`).join('\n') : (e as Error).message);
+      setError(fieldErrors(e));
     }
   };
 
@@ -138,8 +166,13 @@ function LessonForm({ id, initial, classes, archived }: LessonFormProps) {
     if (!archived && !(await confirmDestructive('Archive lesson?', 'Parents will no longer see it. You can restore it later.', 'Archive'))) {
       return;
     }
-    await archive.mutateAsync({ id, archived: !archived });
-    leave();
+    setError(undefined);
+    try {
+      await archive.mutateAsync({ id, archived: !archived });
+      leave();
+    } catch (e) {
+      setError(errorMessage(e));
+    }
   };
 
   return (
@@ -160,7 +193,7 @@ function LessonForm({ id, initial, classes, archived }: LessonFormProps) {
           options={classes.map((c) => ({
             value: `${c.sectionId}:${c.subject.id}`,
             label: `${c.subject.name} • Grade ${c.grade} ${c.section}`,
-            description: `${c.studentCount} students`,
+            description: plural(c.studentCount, 'student'),
           }))}
           value={form.classKey}
           onChange={set('classKey')}
@@ -168,7 +201,7 @@ function LessonForm({ id, initial, classes, archived }: LessonFormProps) {
         <TextField label="Lesson title" value={form.title} onChangeText={set('title')} maxLength={160} />
         <View style={styles.row}>
           <View style={styles.flex}>
-            <TextField label="Date" placeholder="YYYY-MM-DD" value={form.date} onChangeText={set('date')} maxLength={10} />
+            <TextField label="Date" placeholder="YYYY-MM-DD" value={form.date} onChangeText={(t) => set('date')(maskDate(t))} keyboardType="number-pad" maxLength={10} />
           </View>
           <View style={styles.flex}>
             <TextField label="Start time" placeholder="HH:MM" value={form.time} onChangeText={set('time')} maxLength={5} />
@@ -180,18 +213,19 @@ function LessonForm({ id, initial, classes, archived }: LessonFormProps) {
       </Card>
 
       <Card>
-        <ThemedText type="smallBold">Summary status</ThemedText>
-        <Chips<Form['summaryStatus']>
+        <Select<Form['summaryStatus']>
+          label="Summary status"
           options={[
-            { value: 'preparing', label: 'Draft (hidden summary)' },
-            { value: 'ready', label: 'Published to parents' },
+            { value: 'preparing', label: 'Draft', description: "Parents see the lesson but not the summary yet" },
+            {
+              value: 'ready',
+              label: 'Published to parents',
+              description: 'Parents of every student in this section are notified',
+            },
           ]}
           value={form.summaryStatus}
           onChange={set('summaryStatus')}
         />
-        <ThemedText type="caption" themeColor="textSecondary">
-          Publishing notifies the parents of every student in this section.
-        </ThemedText>
         <TextField label="What they learned" multiline value={form.summary} onChangeText={set('summary')} maxLength={5000} />
         <TextField
           label="Key learning points (one per line, optional emoji first)"

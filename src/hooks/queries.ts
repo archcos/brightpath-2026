@@ -18,7 +18,6 @@ const keys = {
   overview: (id: number) => ['child', id, 'overview'] as const,
   weekly: (id: number) => ['child', id, 'weekly'] as const,
   calendar: (id: number, month: string) => ['child', id, 'calendar', month] as const,
-  pendant: (id: number) => ['child', id, 'pendant'] as const,
   lessons: (id: number, f: object) => ['child', id, 'lessons', f] as const,
   lesson: (id: number, slug: string) => ['child', id, 'lesson', slug] as const,
   activities: (id: number, f: object) => ['child', id, 'activities', f] as const,
@@ -52,11 +51,6 @@ export function useCalendar(month: string) {
   });
 }
 
-export function usePendant() {
-  const id = useChildId();
-  return useQuery({ queryKey: keys.pendant(id), queryFn: () => childApi.pendant(id).then((r) => r.pendant), enabled: !!id });
-}
-
 export function useLessons(filters: { subject?: string; range?: LessonRange }) {
   const id = useChildId();
   return useQuery({
@@ -76,7 +70,11 @@ export function useMarkLessonViewed() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (slug: string) => childApi.viewLesson(id, slug),
-    onSuccess: () => qc.invalidateQueries({ queryKey: keys.weekly(id) }),
+    // "Lessons reviewed" appears on both the weekly summary and Home.
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: keys.weekly(id) });
+      qc.invalidateQueries({ queryKey: keys.overview(id) });
+    },
   });
 }
 

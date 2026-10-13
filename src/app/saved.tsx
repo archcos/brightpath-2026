@@ -5,7 +5,7 @@ import { StyleSheet, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Chips } from '@/components/ui/chips';
+import { Segmented } from '@/components/ui/segmented';
 import { EmptyState, ErrorState, Loading } from '@/components/ui/query-state';
 import { Screen } from '@/components/ui/screen';
 import { Spacing } from '@/constants/theme';
@@ -57,7 +57,7 @@ export default function SavedScreen() {
   return (
     <Screen>
       <ThemedText themeColor="textSecondary">{child?.firstName}&apos;s bookmarked items</ThemedText>
-      <Chips
+      <Segmented
         options={[
           { value: 'lessons', label: `Lessons ${data.lessons.length}` },
           { value: 'words', label: `Words ${data.words.length}` },

@@ -3,12 +3,15 @@ import { useState } from 'react';
 
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
-import { Chips } from '@/components/ui/chips';
+import { Card } from '@/components/ui/card';
+import { Select } from '@/components/ui/select';
 import { Screen } from '@/components/ui/screen';
 import { TextField } from '@/components/ui/text-field';
 import { useAuth } from '@/context/auth-context';
 import { useCreateUser } from '@/hooks/admin-queries';
-import { ApiError } from '@/services/api';
+import { errorMessage } from '@/services/api';
+import type { User } from '@/types/api';
+import { roleOptions } from '@/utils/roles';
 
 type SchoolRole = 'teacher' | 'parent';
 
@@ -19,16 +22,17 @@ const USERNAME = /^[a-z0-9._]{3,30}$/;
 export default function NewUserScreen() {
   const { user, permissions } = useAuth();
   const create = useCreateUser();
-  const roles = [
-    ...(permissions?.manage_teachers ? [{ value: 'teacher' as const, label: 'Teacher' }] : []),
-    ...(permissions?.manage_parents ? [{ value: 'parent' as const, label: 'Parent' }] : []),
-  ];
+  const roles = roleOptions<SchoolRole>([
+    ...(permissions?.manage_teachers ? (['teacher'] as const) : []),
+    ...(permissions?.manage_parents ? (['parent'] as const) : []),
+  ]);
   const [role, setRole] = useState<SchoolRole>(roles[0]?.value ?? 'teacher');
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string>();
+  const [createdParent, setCreatedParent] = useState<User>();
   const usernameValid = USERNAME.test(username.trim().toLowerCase());
 
   const submit = async () => {
@@ -41,11 +45,34 @@ export default function NewUserScreen() {
         username: username.trim().toLowerCase(),
         password,
       });
-      router.replace({ pathname: '/admin/user/[id]', params: { id: String(created.id) } });
+      if (created.role === 'teacher') {
+        // Next step for a teacher is assigning classes.
+        router.replace({ pathname: '/admin/user/[id]', params: { id: String(created.id) } });
+      } else {
+        // A parent only shows up in this school's list after connecting a child, so there's no page to open yet.
+        setCreatedParent(created);
+      }
     } catch (e) {
-      setError(e instanceof ApiError && e.details ? e.details.map((d) => d.message).join('\n') : (e as Error).message);
+      setError(errorMessage(e));
     }
   };
+
+  if (createdParent) {
+    return (
+      <Screen>
+        <Card tone="successSoft">
+          <ThemedText type="heading">Parent account created</ThemedText>
+          <ThemedText>
+            {createdParent.displayName} can now sign in as @{createdParent.username} with the temporary password you set.
+          </ThemedText>
+          <ThemedText type="small" themeColor="textSecondary">
+            They&apos;ll appear in your Users list once they connect their child with the student code and birth date.
+          </ThemedText>
+        </Card>
+        <Button label="Done" onPress={() => (router.canGoBack() ? router.back() : router.replace('/admin'))} />
+      </Screen>
+    );
+  }
 
   if (roles.length === 0) {
     return (
@@ -57,8 +84,7 @@ export default function NewUserScreen() {
 
   return (
     <Screen>
-      <ThemedText type="smallBold">Role</ThemedText>
-      <Chips<SchoolRole> options={roles} value={role} onChange={setRole} />
+      <Select<SchoolRole> label="Role" options={roles} value={role} onChange={setRole} />
       {role === 'teacher' && (
         <ThemedText type="small" themeColor="textSecondary">
           The teacher will belong to {user?.school?.name}. Assign their classes after creating the account.

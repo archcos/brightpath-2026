@@ -6,6 +6,7 @@ import type { ActivityInput, LessonInput } from '@/types/api';
 const keys = {
   all: ['teacher'] as const,
   classes: ['teacher', 'classes'] as const,
+  pendant: ['teacher', 'pendant'] as const,
   lessons: ['teacher', 'lessons'] as const,
   lesson: (id: number) => ['teacher', 'lesson', id] as const,
   activities: ['teacher', 'activities'] as const,
@@ -14,6 +15,14 @@ const keys = {
 
 export const useTeacherClasses = () =>
   useQuery({ queryKey: keys.classes, queryFn: () => teacherApi.classes().then((r) => r.classes) });
+
+/** The pendant this teacher wears. Refreshes every minute while the dashboard is open, since battery and sync change. */
+export const useTeacherPendant = () =>
+  useQuery({
+    queryKey: keys.pendant,
+    queryFn: () => teacherApi.pendant().then((r) => r.pendant),
+    refetchInterval: 60_000,
+  });
 
 export const useTeacherLessons = () =>
   useQuery({ queryKey: keys.lessons, queryFn: () => teacherApi.lessons().then((r) => r.lessons) });

@@ -20,6 +20,8 @@ import { useOverview } from '@/hooks/queries';
 import { useTheme } from '@/hooks/use-theme';
 import { formatMonthDay, greeting } from '@/utils/format';
 
+const NEEDS_ATTENTION_PREVIEW = 3;
+
 export default function HomeScreen() {
   const theme = useTheme();
   const { user: parent } = useAuth();
@@ -43,7 +45,11 @@ export default function HomeScreen() {
           <ThemedText type="small" themeColor="textSecondary">
             {greeting()}, {parent?.displayName} 👋
           </ThemedText>
-          <ThemedText type="title">Here&apos;s what {child.firstName} learned today.</ThemedText>
+          <ThemedText type="title">
+            {data && data.stats.lessonsToday === 0
+              ? `Here's how ${child.firstName} is doing.`
+              : `Here's what ${child.firstName} learned today.`}
+          </ThemedText>
         </View>
         <ThemeToggle />
         <Pressable
@@ -78,14 +84,30 @@ export default function HomeScreen() {
       ) : (
         <>
           <StatGrid>
-            <StatTile icon="📘" value={data.stats.lessonsToday} label="Lessons Today" />
-            <StatTile icon="📝" value={data.stats.tasksDue} label="Tasks Due" />
-            <StatTile icon="🧠" value={data.stats.upcomingQuizzes} label="Upcoming Quiz" />
+            <StatTile
+              icon="📘"
+              value={data.stats.lessonsToday}
+              label="Lessons Today"
+              onPress={() => router.navigate('/lessons')}
+            />
+            <StatTile
+              icon="📝"
+              value={data.stats.tasksDue}
+              label="Tasks Due"
+              onPress={() => router.navigate({ pathname: '/activities', params: { state: 'upcoming', group: 'all' } })}
+            />
+            <StatTile
+              icon="🧠"
+              value={data.stats.upcomingQuizzes}
+              label={data.stats.upcomingQuizzes === 1 ? 'Upcoming Quiz' : 'Upcoming Quizzes'}
+              onPress={() => router.navigate({ pathname: '/activities', params: { state: 'upcoming', group: 'quizzes' } })}
+            />
             <StatTile
               icon="⚠️"
               value={data.stats.needsAttention}
               label="Needs Attention"
               tone={data.stats.needsAttention ? 'warningSoft' : 'backgroundElement'}
+              onPress={() => router.navigate({ pathname: '/activities', params: { state: 'overdue', group: 'all' } })}
             />
           </StatGrid>
 
@@ -98,8 +120,19 @@ export default function HomeScreen() {
           </Section>
 
           {data.needsAttention.length > 0 && (
-            <Section title="Needs Attention" subtitle="A few things could use a gentle nudge. Nothing to worry about yet.">
-              {data.needsAttention.map((a) => (
+            <Section
+              title="Needs Attention"
+              subtitle="Overdue or due today — a quick check-in at home can help."
+              action={
+                data.needsAttention.length > NEEDS_ATTENTION_PREVIEW
+                  ? {
+                      label: `See all ${data.needsAttention.length}`,
+                      href: { pathname: '/activities', params: { state: 'overdue', group: 'all' } },
+                    }
+                  : undefined
+              }>
+              {/* Show the most urgent few; a long list here would push everything else off screen. */}
+              {data.needsAttention.slice(0, NEEDS_ATTENTION_PREVIEW).map((a) => (
                 <ActivityCard key={a.id} activity={a} />
               ))}
             </Section>
@@ -153,7 +186,7 @@ export default function HomeScreen() {
                   <Button
                     small
                     variant="ghost"
-                    label="Quiz Details"
+                    label={data.nextQuiz.type === 'exam' ? 'Exam Details' : 'Quiz Details'}
                     onPress={() => router.push({ pathname: '/activity/[slug]', params: { slug: data.nextQuiz!.slug } })}
                   />
                 </View>
@@ -162,9 +195,11 @@ export default function HomeScreen() {
           )}
 
           <Section title="Recent Lesson Summaries" action={{ label: 'See All', href: '/lessons' }}>
-            {data.recentSummaries.map((l) => (
-              <LessonRow key={l.id} lesson={l} />
-            ))}
+            {data.recentSummaries.length === 0 ? (
+              <EmptyState title="No summaries yet" message="They'll appear here after the teacher publishes them." />
+            ) : (
+              data.recentSummaries.map((l) => <LessonRow key={l.id} lesson={l} showDate />)
+            )}
           </Section>
 
           <Card onPress={() => router.push('/weekly')} accessibilityLabel={`${child.firstName}'s week`}>

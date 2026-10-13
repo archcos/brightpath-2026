@@ -36,6 +36,8 @@ export default function ActivityScreen() {
               hitSlop={12}
               accessibilityRole="button"
               accessibilityLabel={activity.saved ? 'Remove from saved' : 'Save activity'}
+              accessibilityState={{ busy: toggleSaved.isPending }}
+              disabled={toggleSaved.isPending}
               onPress={() => toggleSaved.mutate({ type: 'activity', itemId: activity.id, saved: activity.saved })}>
               <ThemedText style={styles.headerIcon}>{activity.saved ? '🔖' : '📑'}</ThemedText>
             </Pressable>

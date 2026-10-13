@@ -13,7 +13,8 @@ export type User = {
   avatar: string;
   role: Role;
   status: UserStatus;
-  school: { id: number; name: string } | null;
+  /** Teachers and school admins only. `active` is false when a super admin deactivated the school. */
+  school: { id: number; name: string; active?: boolean } | null;
   createdAt: string;
 };
 
@@ -56,7 +57,6 @@ export type ChildProfile = Child & {
   adviser: string | null;
   studentCode: string;
   subjects: Required<Subject>[];
-  pendant: { code: string; online: boolean; lastSyncAt: string } | null;
 };
 
 export type Lesson = {
@@ -179,14 +179,18 @@ export type AppNotification = {
   read: boolean;
 };
 
+/** A recording pendant. Worn by at most one teacher; only that teacher and school admins ever see it. */
 export type Pendant = {
+  id: number;
   code: string;
   battery: number;
   firmware: string;
   connection: string;
   online: boolean;
-  lastSyncAt: string;
-  lastRecording: { slug: string; title: string; startsAt: string; durationMin: number; subject: Subject } | null;
+  /** Null until the device has synced for the first time. */
+  lastSyncAt: string | null;
+  /** Who wears it. `userId` is null for teacher profiles without a login. */
+  teacher: { id: number; name: string; userId: number | null } | null;
 };
 
 // --- Teacher ---------------------------------------------------------------------------
@@ -274,6 +278,8 @@ export type AdminUserDetail = {
   /** School admins can only edit parents and teachers. */
   editable: boolean;
   assignments: { sectionId: number; subjectId: number }[];
+  /** The pendant this teacher wears (teachers only). */
+  pendant: Pendant | null;
   children: { id: number; firstName: string; lastName: string; grade: number; section: string }[];
 };
 

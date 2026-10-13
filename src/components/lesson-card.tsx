@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Spacing } from '@/constants/theme';
 import type { Lesson } from '@/types/api';
-import { formatTime } from '@/utils/format';
+import { formatRelativeDay, formatTime } from '@/utils/format';
 
 const openLesson = (slug: string) => router.push({ pathname: '/lesson/[slug]', params: { slug } });
 
@@ -36,9 +36,10 @@ export function LessonCard({ lesson }: { lesson: Lesson }) {
   );
 }
 
-/** Compact row used in lists. */
-export function LessonRow({ lesson }: { lesson: Lesson }) {
+/** Compact row used in lists. `showDate` adds the day for lists that aren't already grouped by day. */
+export function LessonRow({ lesson, showDate }: { lesson: Lesson; showDate?: boolean }) {
   const ready = lesson.summaryStatus === 'ready';
+  const when = showDate ? `${formatRelativeDay(lesson.startsAt)}, ${formatTime(lesson.startsAt)}` : formatTime(lesson.startsAt);
   return (
     <Card
       onPress={ready ? () => openLesson(lesson.slug) : undefined}
@@ -49,7 +50,7 @@ export function LessonRow({ lesson }: { lesson: Lesson }) {
         <SubjectLabel subject={lesson.subject} />
         <ThemedText type="smallBold">{lesson.title}</ThemedText>
         <ThemedText type="caption" themeColor="textSecondary">
-          {formatTime(lesson.startsAt)} • {lesson.durationMin} min • {lesson.teacher}
+          {when} • {lesson.durationMin} min • {lesson.teacher}
         </ThemedText>
       </View>
       <Badge label={ready ? 'Summary' : 'Preparing'} tone={ready ? 'primary' : 'neutral'} />

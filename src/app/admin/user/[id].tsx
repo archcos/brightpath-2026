@@ -2,21 +2,30 @@ import { Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
+import { lastSyncLabel, PendantStatus } from '@/components/pendant-status';
 import { ThemedText } from '@/components/themed-text';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Chips } from '@/components/ui/chips';
+import { Select } from '@/components/ui/select';
 import { ErrorState, Loading } from '@/components/ui/query-state';
 import { Screen } from '@/components/ui/screen';
 import { TextField } from '@/components/ui/text-field';
 import { Radius, Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth-context';
-import { useAdminUser, useSections, useSetAssignments, useSubjects, useUpdateUser } from '@/hooks/admin-queries';
+import {
+  useAdminUser,
+  useAssignPendant,
+  usePendants,
+  useSections,
+  useSetAssignments,
+  useSubjects,
+  useUpdateUser,
+} from '@/hooks/admin-queries';
 import { useTheme } from '@/hooks/use-theme';
-import type { AdminUserDetail, UserStatus } from '@/types/api';
+import type { AdminUserDetail, Pendant, UserStatus } from '@/types/api';
 import { confirmDestructive } from '@/utils/confirm';
-import { ROLE_LABEL, STATUS_TONE } from '@/utils/roles';
+import { ROLE_LABEL, roleOptions, STATUS_OPTIONS, STATUS_TONE } from '@/utils/roles';
 
 export default function AdminUserScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -127,27 +136,10 @@ function UserEditor({ data }: { data: AdminUserDetail }) {
         <ThemedText type="subtitle">Access</ThemedText>
         {canChangeRole && (
           <>
-            <ThemedText type="smallBold">Role</ThemedText>
-            <Chips<SchoolRole>
-              options={[
-                { value: 'parent', label: 'Parent' },
-                { value: 'teacher', label: 'Teacher' },
-              ]}
-              value={role}
-              onChange={setRole}
-            />
+            <Select<SchoolRole> label="Role" options={roleOptions<SchoolRole>(['parent', 'teacher'])} value={role} onChange={setRole} />
           </>
         )}
-        <ThemedText type="smallBold">Status</ThemedText>
-        <Chips<UserStatus>
-          options={[
-            { value: 'active', label: 'Active' },
-            { value: 'pending', label: 'Pending' },
-            { value: 'disabled', label: 'Disabled' },
-          ]}
-          value={status}
-          onChange={setStatus}
-        />
+        <Select<UserStatus> label="Status" options={STATUS_OPTIONS} value={status} onChange={setStatus} />
         <ThemedText type="caption" themeColor="textSecondary">
           Accounts are never deleted — disable them instead. Disabled accounts can be re-enabled.
         </ThemedText>
@@ -220,6 +212,10 @@ function UserEditor({ data }: { data: AdminUserDetail }) {
         </Card>
       )}
 
+      {user.role === 'teacher' && user.status === 'active' && (
+        <TeacherPendantCard userId={user.id} pendant={data.pendant} canManage={!!permissions?.manage_teachers} />
+      )}
+
       {user.role === 'parent' && (
         <Card>
           <ThemedText type="subtitle">Connected children</ThemedText>
@@ -237,6 +233,74 @@ function UserEditor({ data }: { data: AdminUserDetail }) {
         </Card>
       )}
     </Screen>
+  );
+}
+
+const NO_PENDANT = 'none';
+
+/** The pendant this teacher wears, with a dropdown to give, swap or take it back. */
+function TeacherPendantCard({ userId, pendant, canManage }: { userId: number; pendant: Pendant | null; canManage: boolean }) {
+  const pendants = usePendants();
+  const assign = useAssignPendant();
+  // A teacher can only be given a free pendant (or keep their own); others must be taken back first.
+  const options = [
+    { value: NO_PENDANT, label: 'No pendant', description: pendant ? `Take back ${pendant.code}` : undefined },
+    ...(pendants.data ?? [])
+      .filter((p) => !p.teacher || p.id === pendant?.id)
+      .map((p) => ({
+        value: String(p.id),
+        label: p.code,
+        description: `${p.battery}% battery • ${lastSyncLabel(p)}${p.id === pendant?.id ? ' • current' : ''}`,
+      })),
+  ];
+
+  const change = async (value: string) => {
+    const pendantId = value === NO_PENDANT ? null : Number(value);
+    if (pendantId === (pendant?.id ?? null)) return;
+    if (pendant && !(await confirmDestructive(
+      pendantId ? `Swap ${pendant.code}?` : `Take back ${pendant.code}?`,
+      pendantId ? `${pendant.code} goes back to the pool and this teacher gets the new one.` : 'This teacher will have no pendant until you give them one.',
+      pendantId ? 'Swap' : 'Take back',
+    ))) {
+      return;
+    }
+    assign.mutate({ userId, pendantId });
+  };
+
+  return (
+    <Card>
+      <ThemedText type="subtitle">Recording pendant</ThemedText>
+      <ThemedText type="caption" themeColor="textSecondary">
+        The teacher wears it to record lessons. Only this teacher and school admins see its status.
+      </ThemedText>
+      {pendant ? (
+        <PendantStatus pendant={pendant} />
+      ) : (
+        <ThemedText type="small" themeColor="textSecondary">
+          No pendant assigned.
+        </ThemedText>
+      )}
+      {canManage && (
+        <Select
+          label={pendant ? 'Change pendant' : 'Give a pendant'}
+          placeholder={pendants.isLoading ? 'Loading pendants…' : 'Choose a pendant'}
+          options={options}
+          value={pendant ? String(pendant.id) : NO_PENDANT}
+          onChange={change}
+          emptyText="No free pendants. Register one or take one back on the Pendants tab."
+        />
+      )}
+      {canManage && options.length === 1 && !pendant && (
+        <ThemedText type="caption" themeColor="textSecondary">
+          No free pendants. Register one or take one back on the Pendants tab.
+        </ThemedText>
+      )}
+      {assign.error && (
+        <ThemedText type="caption" themeColor="danger">
+          {assign.error.message}
+        </ThemedText>
+      )}
+    </Card>
   );
 }
 

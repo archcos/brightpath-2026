@@ -4,7 +4,8 @@ import { useAuth } from '@/context/auth-context';
 import { storage } from '@/services/storage';
 import type { Child } from '@/types/api';
 
-const KEY = 'brightpath.selectedChild';
+// Remembered per account, so a different parent signing in on the same device starts fresh.
+const keyFor = (userId: number) => `brightpath.selectedChild.${userId}`;
 
 type ChildContextValue = {
   child: Child | null;
@@ -15,13 +16,23 @@ const ChildContext = createContext<ChildContextValue | null>(null);
 
 /** Tracks which connected child the parent is currently viewing. */
 export function ChildProvider({ children: content }: PropsWithChildren) {
-  const { children } = useAuth();
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const { user, children } = useAuth();
+  const userId = user?.id;
+  const [selected, setSelected] = useState<{ userId: number; childId: number } | null>(null);
 
   useEffect(() => {
-    storage.get(KEY).then((v) => v && setSelectedId(Number(v)));
-  }, []);
+    if (!userId) return;
+    let cancelled = false;
+    storage.get(keyFor(userId)).then((v) => {
+      if (!cancelled && v) setSelected({ userId, childId: Number(v) });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
 
+  // Ignore a selection made by another account; fall back to the first connected child.
+  const selectedId = selected && selected.userId === userId ? selected.childId : null;
   const child = children.find((c) => c.id === selectedId) ?? children[0] ?? null;
 
   return (
@@ -29,8 +40,9 @@ export function ChildProvider({ children: content }: PropsWithChildren) {
       value={{
         child,
         selectChild: (id) => {
-          setSelectedId(id);
-          storage.set(KEY, String(id));
+          if (!userId) return;
+          setSelected({ userId, childId: id });
+          storage.set(keyFor(userId), String(id));
         },
       }}>
       {content}

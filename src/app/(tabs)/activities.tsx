@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { router, useLocalSearchParams } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 
 import { ActivityCard } from '@/components/activity-card';
 import { StatGrid, StatTile } from '@/components/stat-tile';
 import { ThemedText } from '@/components/themed-text';
-import { Chips } from '@/components/ui/chips';
+import { FilterRow, Select } from '@/components/ui/select';
 import { EmptyState, ErrorState, Loading } from '@/components/ui/query-state';
 import { Screen } from '@/components/ui/screen';
 import { Spacing } from '@/constants/theme';
@@ -13,7 +13,7 @@ import { useActivities } from '@/hooks/queries';
 import type { ActivityGroup, ActivityStateFilter } from '@/services/brightpath';
 
 const GROUPS: { value: ActivityGroup | 'all'; label: string }[] = [
-  { value: 'all', label: 'All' },
+  { value: 'all', label: 'All types' },
   { value: 'assignments', label: 'Assignments' },
   { value: 'homework', label: 'Homework' },
   { value: 'quizzes', label: 'Quizzes' },
@@ -28,10 +28,23 @@ const STATES: { value: ActivityStateFilter; label: string }[] = [
   { value: 'overdue', label: 'Overdue' },
 ];
 
+const EMPTY_TITLE: Record<ActivityStateFilter, string> = {
+  upcoming: 'Nothing coming up',
+  completed: 'Nothing completed yet',
+  overdue: 'Nothing overdue 🎉',
+};
+
+const pick =<T extends string>(options: { value: T }[], value: string | undefined, fallback: T): T =>
+  options.find((o) => o.value === value)?.value ?? fallback;
+
 export default function ActivitiesScreen() {
   const { child } = useChild();
-  const [group, setGroup] = useState<ActivityGroup | 'all'>('all');
-  const [state, setState] = useState<ActivityStateFilter>('upcoming');
+  // Filters live in the URL so other screens can link here pre-filtered (e.g. Home → overdue).
+  const params = useLocalSearchParams<{ group?: string; state?: string }>();
+  const group = pick(GROUPS, params.group, 'all');
+  const state = pick(STATES, params.state, 'upcoming');
+  const setGroup = (value: ActivityGroup | 'all') => router.setParams({ group: value });
+  const setState = (value: ActivityStateFilter) => router.setParams({ state: value });
   const { data, isLoading, error, refetch, isRefetching } = useActivities({
     group: group === 'all' ? undefined : group,
     state,
@@ -48,22 +61,33 @@ export default function ActivitiesScreen() {
 
       {data && (
         <StatGrid>
-          <StatTile icon="📌" value={data.counts.dueToday} label="Due Today" />
-          <StatTile icon="⏰" value={data.counts.overdue} label="Overdue" tone={data.counts.overdue ? 'dangerSoft' : undefined} />
-          <StatTile icon="🗓️" value={data.counts.upcoming} label="Upcoming" />
-          <StatTile icon="✅" value={data.counts.completed} label="Completed" />
+          <StatTile icon="📌" value={data.counts.dueToday} label="Due Today" onPress={() => setState('upcoming')} />
+          <StatTile
+            icon="⏰"
+            value={data.counts.overdue}
+            label="Overdue"
+            tone={data.counts.overdue ? 'dangerSoft' : undefined}
+            onPress={() => setState('overdue')}
+          />
+          <StatTile icon="🗓️" value={data.counts.upcoming} label="Upcoming" onPress={() => setState('upcoming')} />
+          <StatTile icon="✅" value={data.counts.completed} label="Completed" onPress={() => setState('completed')} />
         </StatGrid>
       )}
 
-      <Chips options={GROUPS} value={group} onChange={setGroup} />
-      <Chips options={STATES} value={state} onChange={setState} />
+      <FilterRow>
+        <Select compact label="Type" options={GROUPS} value={group} onChange={setGroup} />
+        <Select compact label="Status" options={STATES} value={state} onChange={setState} />
+      </FilterRow>
 
       {isLoading ? (
         <Loading />
       ) : error || !data ? (
         <ErrorState error={error} onRetry={refetch} />
       ) : data.activities.length === 0 ? (
-        <EmptyState title="Nothing here" message="No activities match these filters." />
+        <EmptyState
+          title={EMPTY_TITLE[state]}
+          message={group === 'all' ? undefined : 'Try "All" to see every kind of activity.'}
+        />
       ) : (
         data.activities.map((a) => <ActivityCard key={a.id} activity={a} />)
       )}

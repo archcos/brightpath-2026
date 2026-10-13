@@ -3,7 +3,7 @@ import { StyleSheet, TextInput, View } from 'react-native';
 
 import { LessonRow } from '@/components/lesson-card';
 import { ThemedText } from '@/components/themed-text';
-import { Chips } from '@/components/ui/chips';
+import { FilterRow, Select } from '@/components/ui/select';
 import { EmptyState, ErrorState, Loading } from '@/components/ui/query-state';
 import { Screen } from '@/components/ui/screen';
 import { Radius, Spacing } from '@/constants/theme';
@@ -64,8 +64,10 @@ export default function LessonsScreen() {
         accessibilityLabel="Search lessons"
         style={[styles.search, { color: theme.text, backgroundColor: theme.backgroundElement, borderColor: theme.border }]}
       />
-      <Chips options={subjects} value={subject} onChange={setSubject} />
-      <Chips options={RANGES} value={range} onChange={setRange} />
+      <FilterRow>
+        <Select compact label="Subject" options={subjects} value={subject} onChange={setSubject} />
+        <Select compact label="When" options={RANGES} value={range} onChange={setRange} />
+      </FilterRow>
 
       {isLoading ? (
         <Loading />

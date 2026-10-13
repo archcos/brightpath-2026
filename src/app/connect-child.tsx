@@ -3,14 +3,16 @@ import { useState } from 'react';
 
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 import { Screen } from '@/components/ui/screen';
 import { TextField } from '@/components/ui/text-field';
 import { useAuth } from '@/context/auth-context';
 import { useChild } from '@/context/child-context';
+import { errorMessage } from '@/services/api';
 import { meApi } from '@/services/brightpath';
+import { isValidISODate, maskDate, maskStudentCode, toISODate } from '@/utils/format';
 
 const CODE = /^BRP-\d{6}$/;
-const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 export default function ConnectChildScreen() {
   const { refresh } = useAuth();
@@ -20,19 +22,22 @@ export default function ConnectChildScreen() {
   const [error, setError] = useState<string>();
   const [loading, setLoading] = useState(false);
 
-  const normalizedCode = code.trim().toUpperCase();
-  const valid = CODE.test(normalizedCode) && DATE.test(birthDate.trim());
+  const dateComplete = birthDate.length === 10;
+  const dateValid = isValidISODate(birthDate) && birthDate <= toISODate(new Date());
+  const valid = CODE.test(code) && dateValid;
 
   const submit = async () => {
+    if (!valid || loading) return;
     setError(undefined);
     setLoading(true);
     try {
-      const { child } = await meApi.connectChild(normalizedCode, birthDate.trim());
-      await refresh();
+      const { child } = await meApi.connectChild(code, birthDate);
       selectChild(child.id);
-      router.back();
+      await refresh().catch(() => {});
+      if (router.canGoBack()) router.back();
+      else router.replace('/');
     } catch (e) {
-      setError((e as Error).message);
+      setError(errorMessage(e));
     } finally {
       setLoading(false);
     }
@@ -40,15 +45,18 @@ export default function ConnectChildScreen() {
 
   return (
     <Screen>
-      <ThemedText themeColor="textSecondary">
-        Enter the student code from your child&apos;s school and their birth date. Both are needed so only your family
-        can connect.
-      </ThemedText>
+      <Card tone="primarySoft">
+        <ThemedText type="smallBold">🔐 Where do I find these?</ThemedText>
+        <ThemedText type="small">
+          Your child&apos;s school gives you a student code (like BRP-123456). You&apos;ll also need your child&apos;s birth
+          date — both are required so only your family can connect.
+        </ThemedText>
+      </Card>
       <TextField
         label="Student code"
         placeholder="BRP-123456"
         value={code}
-        onChangeText={setCode}
+        onChangeText={(t) => setCode(maskStudentCode(t))}
         autoCapitalize="characters"
         autoCorrect={false}
         maxLength={10}
@@ -57,9 +65,12 @@ export default function ConnectChildScreen() {
         label="Child's birth date"
         placeholder="YYYY-MM-DD"
         value={birthDate}
-        onChangeText={setBirthDate}
-        keyboardType="numbers-and-punctuation"
+        onChangeText={(t) => setBirthDate(maskDate(t))}
+        keyboardType="number-pad"
         maxLength={10}
+        error={dateComplete && !dateValid ? 'Enter a real date in the past, e.g. 2018-11-02' : undefined}
+        returnKeyType="go"
+        onSubmitEditing={submit}
       />
       {error && (
         <ThemedText type="small" themeColor="danger" accessibilityLiveRegion="polite">

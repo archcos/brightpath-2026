@@ -1,5 +1,5 @@
 import { router, type Href } from 'expo-router';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { Badge } from '@/components/ui/badge';
@@ -7,34 +7,43 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ListRow } from '@/components/ui/list-row';
 import { Screen } from '@/components/ui/screen';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth-context';
 import { useChild } from '@/context/child-context';
 import { useChildProfile } from '@/hooks/queries';
-import { formatTime } from '@/utils/format';
+import { useTheme } from '@/hooks/use-theme';
+import { confirmDestructive } from '@/utils/confirm';
 
 export default function ProfileScreen() {
+  const theme = useTheme();
   const { user: parent, children, signOut } = useAuth();
   const { child, selectChild } = useChild();
   const { data: profile } = useChildProfile();
 
-  const menu: { icon: string; title: string; subtitle?: string; href: Href; right?: string }[] = [
+  const confirmSignOut = async () => {
+    if (await confirmDestructive('Sign out?', 'You will need your password to sign back in.', 'Sign out')) await signOut();
+  };
+
+  const menu: { icon: string; title: string; subtitle?: string; href: Href }[] = [
     { icon: '📊', title: 'Weekly Summary', subtitle: `${child?.firstName ?? 'Your child'}'s week`, href: '/weekly' },
     { icon: '🔔', title: 'Notifications', subtitle: 'Parent updates & alerts', href: '/notification-settings' },
     { icon: '🧒', title: 'Student Mode', subtitle: 'Hand the phone to your child', href: '/student' },
     { icon: '🔖', title: 'Saved lessons & words', href: '/saved' },
-    { icon: '🎙️', title: 'Teacher Pendant', href: '/pendant', right: profile?.pendant?.online ? 'Connected' : undefined },
     { icon: '⚙️', title: 'Settings', href: '/settings' },
   ];
 
   return (
     <Screen tab>
       <View style={styles.parent}>
-        <ThemedText style={styles.avatar}>{parent?.avatar}</ThemedText>
+        <View style={[styles.avatarCircle, { backgroundColor: theme.primarySoft }]}>
+          <ThemedText style={styles.avatar}>{parent?.avatar}</ThemedText>
+        </View>
         <ThemedText type="title">{parent?.displayName}</ThemedText>
-        <ThemedText themeColor="textSecondary">
-          Parent / Guardian • {children.length} {children.length === 1 ? 'child' : 'children'} connected
-        </ThemedText>
+        <ThemedText themeColor="textSecondary">@{parent?.username}</ThemedText>
+        <Badge
+          label={`Parent / Guardian • ${children.length} ${children.length === 1 ? 'child' : 'children'}`}
+          tone="primary"
+        />
       </View>
 
       <View style={styles.gap}>
@@ -86,13 +95,6 @@ export default function ProfileScreen() {
               <Badge key={s.code} label={s.name} tone="neutral" />
             ))}
           </View>
-          {profile.pendant && (
-            <Pressable onPress={() => router.push('/pendant')} accessibilityRole="button">
-              <ThemedText type="caption" themeColor="primary">
-                🎙️ Teacher Pendant {profile.pendant.code} • last synced {formatTime(profile.pendant.lastSyncAt)}
-              </ThemedText>
-            </Pressable>
-          )}
         </Card>
       )}
 
@@ -104,7 +106,6 @@ export default function ProfileScreen() {
             title={m.title}
             subtitle={m.subtitle}
             onPress={() => router.push(m.href)}
-            right={m.right ? <Badge label={m.right} tone="success" /> : undefined}
           />
         ))}
       </Card>
@@ -113,7 +114,7 @@ export default function ProfileScreen() {
         BrightPath only shows children connected to your account. You can view lessons, assignments, activities and
         calendar entries — but never change what a teacher recorded.
       </ThemedText>
-      <Button variant="danger" label="Sign out" onPress={signOut} />
+      <Button variant="danger" label="Sign out" onPress={confirmSignOut} />
     </Screen>
   );
 }
@@ -131,7 +132,15 @@ function Fact({ label, value }: { label: string; value: string }) {
 
 const styles = StyleSheet.create({
   parent: { alignItems: 'center', gap: Spacing.one },
-  avatar: { fontSize: 56, lineHeight: 68 },
+  avatarCircle: {
+    width: 96,
+    height: 96,
+    borderRadius: Radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.two,
+  },
+  avatar: { fontSize: 52, lineHeight: 64 },
   gap: { gap: Spacing.two },
   flex: { flex: 1, gap: Spacing.half },
   childRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },

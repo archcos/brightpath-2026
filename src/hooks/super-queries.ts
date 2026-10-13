@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { superApi } from '@/services/brightpath';
 import type { Permission, Role, UserStatus } from '@/types/api';
@@ -13,7 +13,12 @@ const keys = {
 export const useSchools = () => useQuery({ queryKey: keys.schools, queryFn: () => superApi.schools().then((r) => r.schools) });
 
 export const useSuperUsers = (filters: { role?: Role; status?: UserStatus; schoolId?: number; q?: string }) =>
-  useQuery({ queryKey: keys.users(filters), queryFn: () => superApi.users(filters).then((r) => r.users) });
+  useQuery({
+    queryKey: keys.users(filters),
+    queryFn: () => superApi.users(filters).then((r) => r.users),
+    // Keep showing the current list while a new filter/search loads.
+    placeholderData: keepPreviousData,
+  });
 
 export const useSuperUser = (id: number) => useQuery({ queryKey: keys.user(id), queryFn: () => superApi.user(id) });
 

@@ -2,19 +2,20 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
+import { LOW_BATTERY, PendantStatus } from '@/components/pendant-status';
 import { StaffHeader } from '@/components/staff-header';
 import { SubjectIcon } from '@/components/subject-icon';
 import { ThemedText } from '@/components/themed-text';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Chips } from '@/components/ui/chips';
+import { Segmented } from '@/components/ui/segmented';
 import { EmptyState, ErrorState, Loading } from '@/components/ui/query-state';
 import { Screen } from '@/components/ui/screen';
 import { Section } from '@/components/ui/section';
 import { Spacing } from '@/constants/theme';
-import { useTeacherActivities, useTeacherClasses, useTeacherLessons } from '@/hooks/teacher-queries';
-import { ACTIVITY_TYPE_LABEL, formatLongDate, formatMonthDay, formatTime } from '@/utils/format';
+import { useTeacherActivities, useTeacherClasses, useTeacherLessons, useTeacherPendant } from '@/hooks/teacher-queries';
+import { ACTIVITY_TYPE_LABEL, formatLongDate, formatMonthDay, formatTime, plural } from '@/utils/format';
 
 type Tab = 'lessons' | 'activities';
 
@@ -23,17 +24,32 @@ export default function TeacherHome() {
   const classes = useTeacherClasses();
   const lessons = useTeacherLessons();
   const activities = useTeacherActivities();
-  const refreshing = classes.isRefetching || lessons.isRefetching || activities.isRefetching;
+  const pendant = useTeacherPendant();
+  const refreshing = classes.isRefetching || lessons.isRefetching || activities.isRefetching || pendant.isRefetching;
   const refresh = () => {
     classes.refetch();
     lessons.refetch();
     activities.refetch();
+    pendant.refetch();
   };
   const hasClasses = (classes.data?.length ?? 0) > 0;
 
   return (
     <Screen tab refreshing={refreshing} onRefresh={refresh}>
       <StaffHeader title="My Classes" subtitle="Post lesson summaries and activities for your students' families." />
+
+      {pendant.data ? (
+        <Card tone={pendant.data.battery <= LOW_BATTERY ? 'dangerSoft' : 'backgroundElement'}>
+          <PendantStatus pendant={pendant.data} heading="My recording pendant" />
+        </Card>
+      ) : pendant.data === null ? (
+        <Card tone="primarySoft">
+          <ThemedText type="smallBold">🎙️ No recording pendant yet</ThemedText>
+          <ThemedText type="small" themeColor="textSecondary">
+            Your lessons are recorded with a pendant you wear in class. Ask your school admin to give you one.
+          </ThemedText>
+        </Card>
+      ) : null}
 
       {classes.isLoading ? (
         <Loading />
@@ -49,7 +65,7 @@ export default function TeacherHome() {
               <View style={styles.flex}>
                 <ThemedText type="smallBold">{c.subject.name}</ThemedText>
                 <ThemedText type="caption" themeColor="textSecondary">
-                  Grade {c.grade} • {c.section} • {c.studentCount} students
+                  Grade {c.grade} • {c.section} • {plural(c.studentCount, 'student')}
                 </ThemedText>
               </View>
             </Card>
@@ -72,7 +88,7 @@ export default function TeacherHome() {
         </View>
       )}
 
-      <Chips<Tab>
+      <Segmented<Tab>
         options={[
           { value: 'lessons', label: `Lessons ${lessons.data?.length ?? ''}` },
           { value: 'activities', label: `Activities ${activities.data?.length ?? ''}` },

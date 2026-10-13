@@ -8,6 +8,23 @@ export const ROLE_LABEL: Record<Role, string> = {
   super_admin: 'Super Admin',
 };
 
+export const ROLE_DESCRIPTION: Record<Role, string> = {
+  parent: "Sees their connected children's lessons and schoolwork",
+  teacher: 'Posts lesson summaries and activities for assigned classes',
+  admin: "Manages one school's accounts, students and sections",
+  super_admin: 'Manages every school and every account',
+};
+
+/** Dropdown options for picking a role, with what each role can do. */
+export const roleOptions = <R extends Role>(roles: R[]) =>
+  roles.map((value) => ({ value, label: ROLE_LABEL[value], description: ROLE_DESCRIPTION[value] }));
+
+export const STATUS_OPTIONS: { value: UserStatus; label: string; description: string }[] = [
+  { value: 'active', label: 'Active', description: 'Can sign in and use BrightPath' },
+  { value: 'pending', label: 'Pending', description: 'Waiting for approval' },
+  { value: 'disabled', label: 'Disabled', description: "Can't sign in. Nothing is deleted; re-enable anytime." },
+];
+
 export const STATUS_TONE: Record<UserStatus, BadgeTone> = { active: 'success', pending: 'warning', disabled: 'danger' };
 
 export const PERMISSION_LABEL: Record<Permission, { title: string; subtitle: string }> = {
