@@ -13,6 +13,7 @@ const keys = {
   activity: (id: number) => ['teacher', 'activity', id] as const,
   notifications: ['teacher', 'notifications'] as const,
   recordings: ['teacher', 'recordings'] as const,
+  sectionOptions: ['teacher', 'section-options'] as const,
 };
 
 /** Reminders such as "review your AI summary before midnight". Polled so the 10 PM reminder shows up. */
@@ -43,10 +44,22 @@ export function useAttachRecording() {
   });
 }
 
+// One request feeds both hooks; each picks its half.
 export const useTeacherClasses = () =>
-  useQuery({ queryKey: keys.classes, queryFn: () => teacherApi.classes().then((r) => r.classes) });
+  useQuery({ queryKey: keys.classes, queryFn: teacherApi.classes, select: (r) => r.classes });
 
-/** The pendant this teacher wears. Refreshes every minute while the dashboard is open, since battery and sync change. */
+export const useSectionOptions = () => useQuery({ queryKey: keys.sectionOptions, queryFn: teacherApi.sectionOptions });
+
+export function useAddSection() {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: teacherApi.addSection, onSuccess: () => qc.invalidateQueries({ queryKey: keys.all }) });
+}
+
+/** Classes the teacher no longer teaches (e.g. last school year): their lessons stay browsable, read-only. */
+export const useTeacherPastClasses = () =>
+  useQuery({ queryKey: keys.classes, queryFn: teacherApi.classes, select: (r) => r.pastClasses });
+
+/** The pendant this teacher wears. Refreshes every minute while the dashboard is open, since its sync status changes. */
 export const useTeacherPendant = () =>
   useQuery({
     queryKey: keys.pendant,

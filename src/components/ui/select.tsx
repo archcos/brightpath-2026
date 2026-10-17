@@ -6,7 +6,8 @@ import { Popup } from '@/components/ui/popup';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
-export type SelectOption<T extends string = string> = { value: T; label: string; description?: string };
+/** `group`: options with the same group are listed together under that heading (keep them adjacent). */
+export type SelectOption<T extends string = string> = { value: T; label: string; description?: string; group?: string };
 
 type SelectProps<T extends string> = {
   label: string;
@@ -20,6 +21,8 @@ type SelectProps<T extends string> = {
   searchable?: boolean;
   /** Smaller label for filter rows (e.g. two dropdowns side by side). */
   compact?: boolean;
+  /** Read-only: shows the value without opening the list. */
+  disabled?: boolean;
 };
 
 const SEARCH_THRESHOLD = 8;
@@ -35,6 +38,7 @@ export function Select<T extends string>({
   emptyText = 'No matches',
   searchable = options.length > SEARCH_THRESHOLD,
   compact,
+  disabled,
 }: SelectProps<T>) {
   const theme = useTheme();
   const [open, setOpen] = useState(false);
@@ -44,7 +48,7 @@ export function Select<T extends string>({
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return options;
-    return options.filter((o) => `${o.label} ${o.description ?? ''}`.toLowerCase().includes(q));
+    return options.filter((o) => `${o.group ?? ''} ${o.label} ${o.description ?? ''}`.toLowerCase().includes(q));
   }, [options, query]);
 
   const close = () => {
@@ -59,23 +63,25 @@ export function Select<T extends string>({
       </ThemedText>
       <Pressable
         onPress={() => setOpen(true)}
+        disabled={disabled}
         accessibilityRole="button"
+        accessibilityState={{ disabled }}
         accessibilityLabel={`${label}: ${selected?.label ?? placeholder}`}
         accessibilityHint="Opens a list of choices"
         style={({ pressed }) => [
           styles.trigger,
           compact && styles.compactTrigger,
-          { backgroundColor: theme.backgroundElement, borderColor: theme.border },
+          { backgroundColor: disabled ? 'transparent' : theme.backgroundElement, borderColor: theme.border },
           pressed && styles.pressed,
         ]}>
         <ThemedText
           type={compact ? 'smallBold' : 'default'}
           style={styles.flex}
           themeColor={selected ? 'text' : 'textSecondary'}
-          numberOfLines={1}>
+          numberOfLines={compact ? 1 : 2}>
           {selected?.label ?? placeholder}
         </ThemedText>
-        <ThemedText themeColor="textSecondary">▾</ThemedText>
+        {!disabled && <ThemedText themeColor="textSecondary">▾</ThemedText>}
       </Pressable>
 
       <Popup visible={open} onClose={close} style={searchable && styles.tall}>
@@ -114,34 +120,43 @@ export function Select<T extends string>({
               {emptyText}
             </ThemedText>
           }
-          renderItem={({ item }) => {
+          renderItem={({ item, index }) => {
             const active = item.value === value;
+            // Options sharing a `group` (e.g. "Grade 4") get one heading above the first of them.
+            const heading = item.group && item.group !== filtered[index - 1]?.group ? item.group : null;
             return (
-              <Pressable
-                onPress={() => {
-                  onChange(item.value);
-                  close();
-                }}
-                accessibilityRole="radio"
-                accessibilityState={{ checked: active }}
-                style={({ pressed }) => [
-                  styles.option,
-                  { borderColor: theme.border },
-                  active && { backgroundColor: theme.primarySoft },
-                  pressed && styles.pressed,
-                ]}>
-                <View style={styles.flex}>
-                  <ThemedText type="smallBold" style={active ? { color: theme.primary } : undefined}>
-                    {item.label}
+              <>
+                {heading && (
+                  <ThemedText type="label" themeColor="textSecondary" style={styles.group} accessibilityRole="header">
+                    {heading}
                   </ThemedText>
-                  {item.description && (
-                    <ThemedText type="caption" themeColor="textSecondary">
-                      {item.description}
+                )}
+                <Pressable
+                  onPress={() => {
+                    onChange(item.value);
+                    close();
+                  }}
+                  accessibilityRole="radio"
+                  accessibilityState={{ checked: active }}
+                  style={({ pressed }) => [
+                    styles.option,
+                    { borderColor: theme.border },
+                    active && { backgroundColor: theme.primarySoft },
+                    pressed && styles.pressed,
+                  ]}>
+                  <View style={styles.flex}>
+                    <ThemedText type="smallBold" style={active ? { color: theme.primary } : undefined}>
+                      {item.label}
                     </ThemedText>
-                  )}
-                </View>
-                {active && <ThemedText themeColor="primary">✓</ThemedText>}
-              </Pressable>
+                    {item.description && (
+                      <ThemedText type="caption" themeColor="textSecondary">
+                        {item.description}
+                      </ThemedText>
+                    )}
+                  </View>
+                  {active && <ThemedText themeColor="primary">✓</ThemedText>}
+                </Pressable>
+              </>
             );
           }}
         />
@@ -167,6 +182,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: Radius.md,
     paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
   },
   compactTrigger: { minHeight: 44 },
   pressed: { opacity: 0.7 },
@@ -185,5 +201,6 @@ const styles = StyleSheet.create({
     borderRadius: Radius.sm,
   },
   empty: { textAlign: 'center', paddingVertical: Spacing.four },
+  group: { paddingTop: Spacing.three, paddingBottom: Spacing.one, paddingHorizontal: Spacing.two },
   filterRow: { flexDirection: 'row', gap: Spacing.two },
 });

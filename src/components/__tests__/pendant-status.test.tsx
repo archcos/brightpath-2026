@@ -33,18 +33,17 @@ beforeAll(() => {
 });
 afterAll(() => jest.useRealTimers());
 
-it('shows the code, connection and battery', async () => {
+it('shows the code and connection, but no battery level', async () => {
   await renderStatus(pendant());
   expect(screen.getByText('TP-001')).toBeOnTheScreen();
   expect(screen.getByText('Connected')).toBeOnTheScreen();
-  expect(screen.getByText('78%')).toBeOnTheScreen();
-  expect(screen.queryByText(/low battery/i)).not.toBeOnTheScreen();
+  expect(screen.queryByText(/battery|%/i)).not.toBeOnTheScreen();
 });
 
-it('warns when the battery needs charging', async () => {
+it('shows when it is offline, even with a low last-known battery', async () => {
   await renderStatus(pendant({ battery: 15, online: false }));
   expect(screen.getByText('Offline')).toBeOnTheScreen();
-  expect(screen.getByText(/low battery/i)).toBeOnTheScreen();
+  expect(screen.queryByText(/battery/i)).not.toBeOnTheScreen();
 });
 
 it('describes when it last synced', () => {

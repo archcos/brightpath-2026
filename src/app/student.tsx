@@ -14,6 +14,7 @@ import { Radius, Spacing } from '@/constants/theme';
 import { useChild } from '@/context/child-context';
 import { useChildProfile, useOverview } from '@/hooks/queries';
 import { useTheme } from '@/hooks/use-theme';
+import { sectionName } from '@/utils/format';
 
 const exitStudentMode = () => (router.canGoBack() ? router.back() : router.replace('/profile'));
 
@@ -60,7 +61,7 @@ export default function StudentModeScreen() {
           Hi, {child?.firstName}! 👋
         </ThemedText>
         <ThemedText themeColor="textSecondary">
-          Grade {child?.grade} • {child?.section}
+          {child ? sectionName(child.grade, child.section) : null}
         </ThemedText>
       </Card>
 

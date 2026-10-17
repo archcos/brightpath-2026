@@ -9,6 +9,7 @@ import { AppState, Platform, StyleSheet, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { ConfirmHost } from '@/components/ui/confirm-host';
 import { Screen } from '@/components/ui/screen';
 import { Spacing } from '@/constants/theme';
 import { AuthProvider, useAuth } from '@/context/auth-context';
@@ -110,6 +111,7 @@ function RootNavigator() {
         <Stack.Protected guard={!signedIn}>
           <Stack.Screen name="sign-in" options={{ headerShown: false }} />
           <Stack.Screen name="sign-up" options={{ title: 'Create account' }} />
+          <Stack.Screen name="forgot-password" options={{ title: 'Reset password' }} />
         </Stack.Protected>
 
         <Stack.Protected guard={isParent}>
@@ -128,13 +130,20 @@ function RootNavigator() {
           <Stack.Screen name="teacher/index" options={{ headerShown: false }} />
           <Stack.Screen name="teacher/lesson/[id]" options={{ title: 'Lesson' }} />
           <Stack.Screen name="teacher/activity/[id]" options={{ title: 'Activity' }} />
+          <Stack.Screen name="teacher/student/[id]" options={{ title: 'Student' }} />
+          <Stack.Screen name="teacher/new-student" options={{ title: 'New Student' }} />
+          <Stack.Screen name="teacher/new-section" options={{ title: 'New Section' }} />
+          <Stack.Screen name="teacher/student-files" options={{ title: 'Excel import & codes' }} />
         </Stack.Protected>
 
         <Stack.Protected guard={isAdmin}>
           <Stack.Screen name="admin/index" options={{ headerShown: false }} />
           <Stack.Screen name="admin/user/[id]" options={{ title: 'User' }} />
           <Stack.Screen name="admin/new-user" options={{ title: 'New User', presentation: 'modal' }} />
-          <Stack.Screen name="admin/new-student" options={{ title: 'New Student', presentation: 'modal' }} />
+          {/* Not a native modal: it asks for confirmation, and the confirm popup can't show over one on iOS. */}
+          <Stack.Screen name="admin/new-student" options={{ title: 'New Student' }} />
+          <Stack.Screen name="admin/student/[id]" options={{ title: 'Student' }} />
+          <Stack.Screen name="admin/student-files" options={{ title: 'Excel import & codes' }} />
         </Stack.Protected>
 
         <Stack.Protected guard={isSuper}>
@@ -152,6 +161,7 @@ function RootNavigator() {
         </Stack.Protected>
       </Stack>
       </View>
+      <ConfirmHost />
     </ThemeProvider>
   );
 }

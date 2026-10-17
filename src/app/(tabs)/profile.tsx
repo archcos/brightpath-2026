@@ -1,6 +1,7 @@
 import { router, type Href } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 
+import { SEX_LABEL } from '@/components/sex-field';
 import { ThemedText } from '@/components/themed-text';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -13,6 +14,7 @@ import { useChild } from '@/context/child-context';
 import { useChildProfile } from '@/hooks/queries';
 import { useTheme } from '@/hooks/use-theme';
 import { confirmDestructive } from '@/utils/confirm';
+import { sectionName } from '@/utils/format';
 
 export default function ProfileScreen() {
   const theme = useTheme();
@@ -55,10 +57,10 @@ export default function ProfileScreen() {
             <ThemedText style={styles.childAvatar}>{c.avatar}</ThemedText>
             <View style={styles.flex}>
               <ThemedText type="smallBold">
-                {c.firstName} {c.lastName}
+                {c.fullName}
               </ThemedText>
               <ThemedText type="caption" themeColor="textSecondary">
-                Grade {c.grade} • Section {c.section}
+                {sectionName(c.grade, c.section)}
               </ThemedText>
             </View>
             {c.id === child?.id ? (
@@ -77,15 +79,16 @@ export default function ProfileScreen() {
             Child Profile
           </ThemedText>
           <ThemedText type="heading">
-            {profile.avatar} {profile.firstName} {profile.lastName}
+            {profile.avatar} {profile.fullName}
           </ThemedText>
           <ThemedText type="small" themeColor="textSecondary">
-            Grade {profile.grade} • Section {profile.section}
+            {sectionName(profile.grade, profile.section)}
           </ThemedText>
           <ThemedText type="small">{profile.school}</ThemedText>
           <View style={styles.facts}>
             <Fact label="Class Adviser" value={profile.adviser ?? '—'} />
-            <Fact label="Student Code" value={profile.studentCode} />
+            <Fact label="Student ID" value={profile.studentCode} />
+            {profile.sex && <Fact label="Sex" value={SEX_LABEL[profile.sex]} />}
           </View>
           <ThemedText type="label" themeColor="textSecondary">
             Subjects

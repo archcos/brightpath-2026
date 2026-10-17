@@ -13,20 +13,36 @@ export function toISODate(date: Date): string {
   return `${date.getFullYear()}-${p(date.getMonth() + 1)}-${p(date.getDate())}`;
 }
 
+/** "Grade 4 - Faith": how schools in the Philippines name a section. */
+export const sectionName = (grade: number, name: string) => `Grade ${grade} - ${name}`;
+
 /** "1 student", "3 students". */
 export const plural = (n: number, word: string, many = `${word}s`) => `${n} ${n === 1 ? word : many}`;
 
-/** Formats typed digits as YYYY-MM-DD while the user types, so they never have to enter the dashes. */
-export function maskDate(text: string): string {
-  const digits = text.replace(/\D/g, '').slice(0, 8);
-  return [digits.slice(0, 4), digits.slice(4, 6), digits.slice(6, 8)].filter(Boolean).join('-');
-}
+// Lesson lengths to pick from: 15–120 min in 5-minute steps, then longer blocks (server allows 5–480).
+const DURATIONS = [...Array.from({ length: 22 }, (_, i) => 15 + i * 5), 150, 180, 240, 300, 360, 420, 480];
 
-/** "brp123456" or "123456" → "BRP-123456" as the parent types (and still lets them backspace to empty). */
-export function maskStudentCode(text: string): string {
-  const digits = text.replace(/^\s*brp-?/i, '').replace(/\D/g, '').slice(0, 6);
-  if (!digits) return text.toUpperCase().replace(/[^BRP-]/g, '').slice(0, 4);
-  return `BRP-${digits}`;
+/** 45 → "45 min", 90 → "1 hr 30 min", 120 → "2 hr". */
+export const durationLabel = (min: number) => {
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return h ? `${h} hr${m ? ` ${m} min` : ''}` : `${min} min`;
+};
+
+/** The usual lengths, plus the lesson's own if it's an unusual one (e.g. 32 min from a recording). */
+export const durationOptions = (current: string) =>
+  [...new Set([...DURATIONS, Number(current)])]
+    .filter((n) => n >= 5 && n <= 480)
+    .sort((a, b) => a - b)
+    .map((n) => ({ value: String(n), label: durationLabel(n) }));
+
+/** A one-time connection code, same rule as the server: 8 of A–Z/2–9 without 0, O, 1, I, L, as "ABCD-2345". */
+export const CONNECTION_CODE = /^[A-HJKMNP-Z2-9]{4}-[A-HJKMNP-Z2-9]{4}$/;
+
+/** "abcd2345" → "ABCD-2345" as the parent types; drops characters codes never contain. */
+export function maskConnectionCode(text: string): string {
+  const chars = text.toUpperCase().replace(/[^A-HJKMNP-Z2-9]/g, '').slice(0, 8);
+  return chars.length > 4 ? `${chars.slice(0, 4)}-${chars.slice(4)}` : chars;
 }
 
 /** True for a real calendar date in YYYY-MM-DD form (rejects e.g. 2018-02-31). */

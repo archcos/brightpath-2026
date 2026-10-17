@@ -8,6 +8,7 @@ import { Radius, Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth-context';
 import { useChild } from '@/context/child-context';
 import { useTheme } from '@/hooks/use-theme';
+import { sectionName } from '@/utils/format';
 
 /** Card showing the child being viewed, with a picker to switch between connected children. */
 export function ChildSwitcher() {
@@ -23,10 +24,10 @@ export function ChildSwitcher() {
         <ThemedText style={styles.avatar}>{child.avatar}</ThemedText>
         <View style={styles.flex}>
           <ThemedText type="subtitle">
-            {child.firstName} {child.lastName}
+            {child.fullName}
           </ThemedText>
           <ThemedText type="caption" themeColor="textSecondary">
-            Grade {child.grade} • Section {child.section}
+            {sectionName(child.grade, child.section)}
           </ThemedText>
         </View>
         {children.length > 1 && (
@@ -64,10 +65,10 @@ export function ChildSwitcher() {
             <ThemedText style={styles.avatarSmall}>{c.avatar}</ThemedText>
             <View style={styles.flex}>
               <ThemedText type="smallBold">
-                {c.firstName} {c.lastName}
+                {c.fullName}
               </ThemedText>
               <ThemedText type="caption" themeColor="textSecondary">
-                Grade {c.grade} • Section {c.section}
+                {sectionName(c.grade, c.section)}
               </ThemedText>
             </View>
             {c.id === child.id && <ThemedText themeColor="primary">✓</ThemedText>}

@@ -24,7 +24,11 @@ jest.mock('@/services/storage', () => {
 const child = (id: number, firstName: string): Child => ({
   id,
   firstName,
+  middleName: null,
   lastName: 'Santos',
+  suffix: null,
+  fullName: `${firstName} Santos`,
+  sex: null,
   avatar: '🧒',
   grade: 4,
   section: 'Rizal',

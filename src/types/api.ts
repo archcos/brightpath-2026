@@ -5,11 +5,20 @@ export type Subject = { code?: string; name: string; color: string };
 export type Role = 'parent' | 'teacher' | 'admin' | 'super_admin';
 export type UserStatus = 'active' | 'pending' | 'disabled';
 
-export type User = {
+export type Suffix = 'Jr.' | 'Sr.' | 'II' | 'III' | 'IV' | 'V';
+
+/** As on school records. Null only for people added before it was collected. */
+export type Sex = 'male' | 'female';
+
+/** A person's name as the server stores it. Display names ("First M. Last Jr.") are derived from it. */
+export type PersonName = { firstName: string; middleName: string | null; lastName: string; suffix: Suffix | null };
+
+export type User = PersonName & {
   id: number;
   email: string;
   username: string;
   displayName: string;
+  sex: Sex | null;
   avatar: string;
   role: Role;
   status: UserStatus;
@@ -36,16 +45,17 @@ export type ClassAssignment = {
   sectionId: number;
   grade: number;
   section: string;
+  schoolYear: string;
   subject: Required<Subject> & { id: number };
   studentCount: number;
 };
 
 export type TeacherProfile = { id: number | null; name: string | null; classes: ClassAssignment[] };
 
-export type Child = {
+export type Child = PersonName & {
   id: number;
-  firstName: string;
-  lastName: string;
+  fullName: string;
+  sex: Sex | null;
   avatar: string;
   grade: number;
   section: string;
@@ -298,7 +308,7 @@ export type AdminUserDetail = {
   assignments: { sectionId: number; subjectId: number }[];
   /** The pendant this teacher wears (teachers only). */
   pendant: Pendant | null;
-  children: { id: number; firstName: string; lastName: string; grade: number; section: string }[];
+  children: { id: number; firstName: string; lastName: string; fullName: string; grade: number; section: string }[];
 };
 
 export type Section = {
@@ -311,16 +321,51 @@ export type Section = {
   students: number;
 };
 
-export type AdminStudent = {
+export type AdminStudent = PersonName & {
   id: number;
-  firstName: string;
-  lastName: string;
+  fullName: string;
+  sex: Sex | null;
   avatar: string;
   studentCode: string;
   birthDate: string;
   status: 'active' | 'inactive';
   section: { id: number; grade: number; name: string; schoolYear: string };
+  /** Parents currently connected. */
   parents: number;
+  /** One-time codes issued but not used, revoked or expired yet. */
+  openCodes: number;
+};
+
+/** A one-time code a parent enters (with the child's birth date) to connect. Works once, until it expires. */
+export type StudentCode = {
+  id: number;
+  code: string;
+  state: 'active' | 'used' | 'revoked' | 'expired';
+  createdAt: string;
+  createdBy: string;
+  expiresAt: string;
+  usedAt: string | null;
+  usedBy: { id: number; name: string } | null;
+  revokedAt: string | null;
+};
+
+/** A student as their teacher / school admin sees them: who is connected, and every code issued. */
+export type StudentDetail = {
+  student: AdminStudent;
+  parents: { id: number; name: string; email: string; status: UserStatus; connectedAt: string; code: string | null }[];
+  codes: StudentCode[];
+};
+
+/** An upload key for a pendant. Each key locks to the first device (hardware ID) that uses it. */
+export type PendantKey = {
+  id: number;
+  createdAt: string;
+  createdBy: string | null;
+  state: 'waiting' | 'bound' | 'revoked';
+  deviceId: string | null;
+  boundAt: string | null;
+  lastUsedAt: string | null;
+  revokedAt: string | null;
 };
 
 export type SuperUserDetail = {

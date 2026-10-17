@@ -1,6 +1,8 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
 
+import { EMPTY_NAME, isNameComplete, NameFields, toPersonName } from '@/components/name-fields';
+import { SexField } from '@/components/sex-field';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
 import { Screen } from '@/components/ui/screen';
@@ -8,7 +10,7 @@ import { Select } from '@/components/ui/select';
 import { TextField } from '@/components/ui/text-field';
 import { useSchools, useSuperCreateUser } from '@/hooks/super-queries';
 import { errorMessage } from '@/services/api';
-import type { Role } from '@/types/api';
+import type { Role, Sex } from '@/types/api';
 import { roleOptions } from '@/utils/roles';
 
 // Same rule as the server: no '@', so login can tell usernames from emails.
@@ -20,7 +22,8 @@ export default function SuperNewUserScreen() {
   const create = useSuperCreateUser();
   const [role, setRole] = useState<Role>('admin');
   const [schoolId, setSchoolId] = useState('');
-  const [displayName, setDisplayName] = useState('');
+  const [name, setName] = useState(EMPTY_NAME);
+  const [sex, setSex] = useState<Sex | ''>('');
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -33,7 +36,8 @@ export default function SuperNewUserScreen() {
     try {
       const { user } = await create.mutateAsync({
         role,
-        displayName: displayName.trim(),
+        ...toPersonName(name),
+        sex: sex as Sex,
         email: email.trim(),
         username: username.trim().toLowerCase(),
         password,
@@ -68,8 +72,9 @@ export default function SuperNewUserScreen() {
           onChange={setSchoolId}
         />
       )}
-      <TextField label="Name" value={displayName} onChangeText={setDisplayName} maxLength={80} />
-      <TextField label="Email" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" />
+      <NameFields value={name} onChange={setName} />
+      <SexField value={sex} onChange={setSex} />
+      <TextField label="Email" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" maxLength={255} />
       <TextField
         label="Username"
         placeholder="e.g. juan.delacruz"
@@ -100,7 +105,7 @@ export default function SuperNewUserScreen() {
         label="Create account"
         onPress={submit}
         loading={create.isPending}
-        disabled={!displayName.trim() || !email.trim() || !usernameValid || password.length < 8 || (needsSchool && !schoolId)}
+        disabled={!isNameComplete(name) || !sex || !email.trim() || !usernameValid || password.length < 8 || (needsSchool && !schoolId)}
       />
     </Screen>
   );

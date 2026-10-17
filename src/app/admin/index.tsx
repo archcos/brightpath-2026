@@ -1,13 +1,16 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Platform, StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, Switch, View } from 'react-native';
 
+import { PendantKeys } from '@/components/pendant-keys';
 import { PendantStatus } from '@/components/pendant-status';
 import { StaffHeader } from '@/components/staff-header';
+import { StudentCard } from '@/components/student-card';
 import { ThemedText } from '@/components/themed-text';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { ListRow } from '@/components/ui/list-row';
 import { Segmented } from '@/components/ui/segmented';
 import { EmptyState, ErrorState, Loading } from '@/components/ui/query-state';
 import { Screen } from '@/components/ui/screen';
@@ -16,21 +19,24 @@ import { TextField } from '@/components/ui/text-field';
 import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth-context';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
+import { useTheme } from '@/hooks/use-theme';
 import {
   useAdminUsers,
   useCreateSection,
   useNewPendantKey,
   usePendants,
   useRegisterPendant,
+  useSchoolSettings,
   useSections,
   useStudents,
   useTakeBackPendant,
+  useUpdateSchoolSettings,
   useUpdateSection,
   useUpdateStudent,
 } from '@/hooks/admin-queries';
 import type { AdminStudent, Pendant, Permissions } from '@/types/api';
 import { confirmDestructive } from '@/utils/confirm';
-import { formatMonthDay, plural } from '@/utils/format';
+import { formatMonthDay, plural, sectionName } from '@/utils/format';
 import { currentSchoolYear, ROLE_LABEL, STATUS_TONE } from '@/utils/roles';
 
 type Tab = 'users' | 'students' | 'sections' | 'pendants';
@@ -51,7 +57,7 @@ export default function AdminHome() {
   return (
     <Screen tab>
       <StaffHeader
-        title={user?.school?.name ?? 'School Admin'}
+        eyebrow={user?.school?.name ?? 'School Admin'}
         subtitle="Manage your school's accounts, students, sections and recording pendants."
       />
       <Segmented<Tab>
@@ -111,7 +117,7 @@ function UsersTab({ perms }: { perms: Permissions }) {
         value={filter}
         onChange={setFilter}
       />
-      <TextField label="Search" placeholder="Name, username or email" value={q} onChangeText={setQ} autoCapitalize="none" />
+      <TextField label="Search" placeholder="Name, username or email" value={q} onChangeText={setQ} autoCapitalize="none" maxLength={100} />
       {isLoading ? (
         <Loading />
       ) : error || !data ? (
@@ -167,7 +173,18 @@ function StudentsTab({ perms }: { perms: Permissions }) {
   return (
     <View style={styles.gap}>
       {perms.manage_students ? (
-        <Button label="+ New student" onPress={() => router.push('/admin/new-student')} />
+        <>
+          <Button
+            label="+ New student"
+            // Start on the section being viewed; the form still lets the admin pick another.
+            onPress={() => router.push({ pathname: '/admin/new-student', params: sectionId === 'all' ? {} : { sectionId } })}
+          />
+          <Button
+            variant="secondary"
+            label="Excel import & parent codes"
+            onPress={() => router.push({ pathname: '/admin/student-files', params: sectionId === 'all' ? {} : { sectionId } })}
+          />
+        </>
       ) : (
         <ReadOnlyNote what="students" />
       )}
@@ -180,7 +197,7 @@ function StudentsTab({ perms }: { perms: Permissions }) {
             { value: 'all', label: 'All sections' },
             ...(sections.data ?? [])
               .filter((s) => s.status === 'active')
-              .map((s) => ({ value: String(s.id), label: `Grade ${s.grade} • ${s.name}`, description: `School year ${s.schoolYear}` })),
+              .map((s) => ({ value: String(s.id), label: sectionName(s.grade, s.name), description: s.schoolYear })),
           ]}
           value={sectionId}
           onChange={setSectionId}
@@ -209,22 +226,7 @@ function StudentsTab({ perms }: { perms: Permissions }) {
         <EmptyState title={status === 'active' ? 'No active students' : 'No inactive students'} />
       ) : (
         data.map((s) => (
-          <Card key={s.id}>
-            <View style={styles.row}>
-              <ThemedText style={styles.avatar}>{s.avatar}</ThemedText>
-              <View style={styles.flex}>
-                <ThemedText type="smallBold">
-                  {s.firstName} {s.lastName}
-                </ThemedText>
-                <ThemedText type="caption" themeColor="textSecondary">
-                  Grade {s.section.grade} • {s.section.name} • {s.section.schoolYear} • born {s.birthDate}
-                </ThemedText>
-                <ThemedText type="code" selectable>
-                  {s.studentCode}
-                </ThemedText>
-              </View>
-              <Badge label={`${s.parents} parent${s.parents === 1 ? '' : 's'}`} tone={s.parents ? 'success' : 'neutral'} />
-            </View>
+          <StudentCard key={s.id} student={s} onPress={() => router.push({ pathname: '/admin/student/[id]', params: { id: String(s.id) } })}>
             {perms.manage_students && (
               <Button
                 small
@@ -234,11 +236,11 @@ function StudentsTab({ perms }: { perms: Permissions }) {
                 loading={update.isPending && update.variables?.id === s.id}
               />
             )}
-          </Card>
+          </StudentCard>
         ))
       )}
       <ThemedText type="caption" themeColor="textSecondary">
-        Give parents the student code and confirm the birth date — they need both to connect.
+        Open a student to give a parent a one-time code. Each code connects one parent, once, with the birth date.
       </ThemedText>
     </View>
   );
@@ -248,6 +250,9 @@ function SectionsTab({ perms }: { perms: Permissions }) {
   const { data, isLoading, error, refetch } = useSections();
   const create = useCreateSection();
   const update = useUpdateSection();
+  const settings = useSchoolSettings();
+  const updateSettings = useUpdateSchoolSettings();
+  const theme = useTheme();
   const [grade, setGrade] = useState('');
   const [name, setName] = useState('');
   const [schoolYear, setSchoolYear] = useState(currentSchoolYear());
@@ -275,6 +280,26 @@ function SectionsTab({ perms }: { perms: Permissions }) {
   return (
     <View style={styles.gap}>
       {!perms.manage_sections && <ReadOnlyNote what="sections" />}
+      <Card>
+        <ListRow
+          title="Teachers can add their own sections"
+          subtitle="e.g. Grade 4 - Faith, with the subjects they teach there. They become its adviser. Off: only admins add sections."
+          right={
+            <Switch
+              value={!!settings.data?.teachersAddSections}
+              onValueChange={(on) => updateSettings.mutate({ teachersAddSections: on })}
+              disabled={!perms.manage_sections || !settings.data || updateSettings.isPending}
+              trackColor={{ true: theme.primary }}
+              accessibilityLabel="Teachers can add their own sections"
+            />
+          }
+        />
+        {updateSettings.error && (
+          <ThemedText type="caption" themeColor="danger">
+            {updateSettings.error.message}
+          </ThemedText>
+        )}
+      </Card>
       {update.error && (
         <ThemedText type="caption" themeColor="danger">
           {update.error.message}
@@ -296,7 +321,7 @@ function SectionsTab({ perms }: { perms: Permissions }) {
             {data
               .filter((s) => s.schoolYear === year)
               .map((s) => {
-                const label = `Grade ${s.grade} • ${s.name}`;
+                const label = sectionName(s.grade, s.name);
                 const archived = s.status === 'archived';
                 return (
                   <Card key={s.id} style={styles.row}>
@@ -361,6 +386,8 @@ function PendantsTab({ perms }: { perms: Permissions }) {
   const [code, setCode] = useState('');
   // The server returns a device key only once; it's kept here until the admin leaves the tab.
   const [shownKey, setShownKey] = useState<{ code: string; key: string }>();
+  // Which pendant's key list is open.
+  const [keysOf, setKeysOf] = useState<number | null>(null);
   const canManage = perms.manage_teachers;
   const available = (data ?? []).filter((p) => !p.teacher).length;
 
@@ -377,13 +404,14 @@ function PendantsTab({ perms }: { perms: Permissions }) {
   const confirmNewKey = async (p: Pendant) => {
     const ok = await confirmDestructive(
       `New upload key for ${p.code}?`,
-      'The old key stops working right away. Put the new key into the pendant so it can keep uploading lessons.',
+      'The key locks to the first device that uploads with it. Older keys keep working until you revoke them.',
       'New key',
     );
     if (!ok) return;
     try {
       const { deviceKey } = await newKey.mutateAsync(p.id);
       setShownKey({ code: p.code, key: deviceKey });
+      setKeysOf(p.id);
     } catch {
       // Shown above via newKey.error.
     }
@@ -420,7 +448,8 @@ function PendantsTab({ perms }: { perms: Permissions }) {
             {shownKey.key}
           </ThemedText>
           <ThemedText type="caption">
-            Copy it into the pendant&apos;s settings now. It won&apos;t be shown again; if it&apos;s lost, make a new key.
+            Copy it into the pendant&apos;s settings now. It won&apos;t be shown again, and it locks to the first device that
+            uploads with it. If it&apos;s lost, make a new key and revoke this one.
           </ThemedText>
           <Button small variant="secondary" label="Done" onPress={() => setShownKey(undefined)} />
         </Card>
@@ -470,6 +499,13 @@ function PendantsTab({ perms }: { perms: Permissions }) {
                   />
                 )}
               </View>
+              <Button
+                small
+                variant="secondary"
+                label={keysOf === p.id ? 'Hide upload keys' : 'Upload keys'}
+                onPress={() => setKeysOf((id) => (id === p.id ? null : p.id))}
+              />
+              {keysOf === p.id && <PendantKeys pendantId={p.id} pendantCode={p.code} canManage={canManage} />}
             </Card>
           ))}
         </>

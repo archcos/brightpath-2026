@@ -5,6 +5,7 @@ import { StyleSheet, Switch, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { DateField } from '@/components/ui/date-field';
 import { ListRow } from '@/components/ui/list-row';
 import { ErrorState, Loading } from '@/components/ui/query-state';
 import { Screen } from '@/components/ui/screen';
@@ -16,13 +17,15 @@ import {
   useSaveActivity,
   useTeacherActivity,
   useTeacherClasses,
+  useTeacherPastClasses,
   useTeacherLessons,
 } from '@/hooks/teacher-queries';
 import { useTheme } from '@/hooks/use-theme';
 import { ApiError, errorMessage } from '@/services/api';
 import type { ActivityInput, ActivityType, ClassAssignment, TeacherActivityDetail } from '@/types/api';
-import { confirmDestructive } from '@/utils/confirm';
-import { ACTIVITY_TYPE_LABEL, formatLongDate, maskDate, plural, toISODate } from '@/utils/format';
+import { classKey, classOptions } from '@/utils/classes';
+import { confirmAction, confirmDestructive } from '@/utils/confirm';
+import { ACTIVITY_TYPE_LABEL, formatLongDate, toISODate } from '@/utils/format';
 
 type Form = {
   classKey: string;
@@ -84,10 +87,12 @@ const TYPES = Object.entries(ACTIVITY_TYPE_LABEL).map(([value, label]) => ({ val
 
 /** Loads the activity (when editing), then mounts the form with its initial values. */
 export default function ActivityEditor() {
-  const { id: idParam } = useLocalSearchParams<{ id: string }>();
+  // `classKey`: the class the dashboard was showing, used as the default for a new item.
+  const { id: idParam, classKey: presetClass } = useLocalSearchParams<{ id: string; classKey?: string }>();
   const id = idParam === 'new' ? null : Number(idParam);
   const invalidId = id !== null && !(Number.isInteger(id) && id > 0);
   const classes = useTeacherClasses();
+  const pastClasses = useTeacherPastClasses();
   const existing = useTeacherActivity(invalidId ? null : id);
 
   if (invalidId) return <ErrorState error={new Error('This activity link is not valid.')} />;
@@ -110,7 +115,10 @@ export default function ActivityEditor() {
         topics: a.topics.join(', '),
         reviewSuggested: a.reviewSuggested,
       }
-    : { ...empty(), classKey: first ? `${first.sectionId}:${first.subject.id}` : '' };
+    : {
+        ...empty(),
+        classKey: classes.data?.some((c) => classKey(c) === presetClass) ? presetClass! : first ? classKey(first) : '',
+      };
 
   return (
     <ActivityForm
@@ -118,6 +126,7 @@ export default function ActivityEditor() {
       id={id}
       initial={initial}
       classes={classes.data ?? []}
+      pastClasses={pastClasses.data ?? []}
       progress={a?.progress}
       archived={a?.archived ?? false}
     />
@@ -128,17 +137,30 @@ type ActivityFormProps = {
   id: number | null;
   initial: Form;
   classes: ClassAssignment[];
+  /** Classes the teacher no longer teaches: their items open read-only. */
+  pastClasses: ClassAssignment[];
   progress?: TeacherActivityDetail['progress'];
   archived: boolean;
 };
 
-function ActivityForm({ id, initial, classes, progress, archived }: ActivityFormProps) {
+function ActivityForm({ id, initial, classes, pastClasses, progress, archived }: ActivityFormProps) {
   const theme = useTheme();
   const lessons = useTeacherLessons();
   const save = useSaveActivity();
   const archive = useArchiveActivity();
   const [form, setForm] = useState<Form>(initial);
   const [error, setError] = useState<string>();
+  // Existing items open read-only so they can be read first; new ones start in edit mode.
+  const [editing, setEditing] = useState(id === null);
+  // An item from a past class (e.g. last school year) can be read but not changed; the server refuses edits too.
+  const readOnly = id !== null && !classes.some((c) => classKey(c) === initial.classKey);
+  const ownPastClass = readOnly ? pastClasses.filter((c) => classKey(c) === initial.classKey) : [];
+
+  const cancel = () => {
+    setForm(initial);
+    setError(undefined);
+    setEditing(false);
+  };
 
   const set = <K extends keyof Form>(key: K) => (value: Form[K]) => setForm((f) => ({ ...f, [key]: value }));
   const [sectionId, subjectId] = form.classKey.split(':').map(Number);
@@ -147,6 +169,14 @@ function ActivityForm({ id, initial, classes, progress, archived }: ActivityForm
 
   const submit = async () => {
     setError(undefined);
+    const ok = await confirmAction(
+      id ? 'Save changes?' : 'Create activity?',
+      id
+        ? 'Parents of every student in this class will see the updated details.'
+        : 'Parents of every student in this class will be notified.',
+      id ? 'Save' : 'Create & notify',
+    );
+    if (!ok) return;
     const input: ActivityInput = {
       sectionId,
       subjectId,
@@ -185,7 +215,7 @@ function ActivityForm({ id, initial, classes, progress, archived }: ActivityForm
 
   return (
     <Screen>
-      <Stack.Screen options={{ title: id ? 'Edit Activity' : 'New Activity' }} />
+      <Stack.Screen options={{ title: !id ? 'New Activity' : editing ? 'Edit Activity' : 'Activity' }} />
       {archived && (
         <Card tone="warningSoft">
           <ThemedText type="smallBold">This activity is archived</ThemedText>
@@ -207,24 +237,28 @@ function ActivityForm({ id, initial, classes, progress, archived }: ActivityForm
           label="Class"
           placeholder="Choose a class"
           searchPlaceholder="Search subject, grade or section"
-          options={classes.map((c) => ({
-            value: `${c.sectionId}:${c.subject.id}`,
-            label: `${c.subject.name} • Grade ${c.grade} ${c.section}`,
-            description: plural(c.studentCount, 'student'),
-          }))}
+          options={classOptions(classes, ownPastClass)}
           value={form.classKey}
           onChange={(v) => setForm((f) => ({ ...f, classKey: v, lessonId: 'none' }))}
+          disabled={!editing}
         />
-        <Select<ActivityType> label="Type" options={TYPES} value={form.type} onChange={set('type')} />
-        <TextField label="Title" value={form.title} onChangeText={set('title')} maxLength={160} />
-        <TextField label="Short description" value={form.description} onChangeText={set('description')} maxLength={255} />
-        <TextField label="Instructions (optional)" multiline value={form.instructions} onChangeText={set('instructions')} maxLength={2000} />
+        <Select<ActivityType> label="Type" options={TYPES} value={form.type} onChange={set('type')} disabled={!editing} />
+        <TextField label="Title" wrap maxLines={3} editable={editing} value={form.title} onChangeText={set('title')} maxLength={160} />
+        <TextField label="Short description" wrap editable={editing} value={form.description} onChangeText={set('description')} maxLength={255} />
+        <TextField label="Instructions (optional)" multiline editable={editing} value={form.instructions} onChangeText={set('instructions')} maxLength={2000} />
         <View style={styles.row}>
           <View style={styles.flex}>
-            <TextField label="Assigned" placeholder="YYYY-MM-DD" value={form.assignedOn} onChangeText={(t) => set('assignedOn')(maskDate(t))} keyboardType="number-pad" maxLength={10} />
+            <DateField
+              label="Assigned"
+              mode="date"
+              value={form.assignedOn}
+              // The due date can't come before the assigned date, so move it along.
+              onChange={(v) => setForm((f) => ({ ...f, assignedOn: v, dueOn: f.dueOn && f.dueOn < v ? v : f.dueOn }))}
+              disabled={!editing}
+            />
           </View>
           <View style={styles.flex}>
-            <TextField label="Due / date" placeholder="YYYY-MM-DD" value={form.dueOn} onChangeText={(t) => set('dueOn')(maskDate(t))} keyboardType="number-pad" maxLength={10} />
+            <DateField label="Due / date" mode="date" value={form.dueOn} onChange={set('dueOn')} min={form.assignedOn} disabled={!editing} />
           </View>
         </View>
       </Card>
@@ -241,8 +275,9 @@ function ActivityForm({ id, initial, classes, progress, archived }: ActivityForm
           ]}
           value={form.lessonId}
           onChange={set('lessonId')}
+          disabled={!editing}
         />
-        <TextField label="Topics (comma-separated)" value={form.topics} onChangeText={set('topics')} />
+        <TextField label="Topics (comma-separated)" wrap maxLines={3} editable={editing} value={form.topics} onChangeText={set('topics')} maxLength={900} />
         <ListRow
           title="Suggest review"
           subtitle="Shows a “Review Suggested” badge to parents"
@@ -250,6 +285,7 @@ function ActivityForm({ id, initial, classes, progress, archived }: ActivityForm
             <Switch
               value={form.reviewSuggested}
               onValueChange={set('reviewSuggested')}
+              disabled={!editing}
               trackColor={{ true: theme.primary }}
               accessibilityLabel="Suggest review"
             />
@@ -262,13 +298,27 @@ function ActivityForm({ id, initial, classes, progress, archived }: ActivityForm
           {error}
         </ThemedText>
       )}
-      <Button
-        label={id ? 'Save changes' : 'Create & notify parents'}
-        onPress={submit}
-        loading={save.isPending}
-        disabled={!form.title || !form.description || !form.classKey}
-      />
-      {id && (
+      {editing ? (
+        <>
+          <Button
+            label={id ? 'Save changes' : 'Create & notify parents'}
+            onPress={submit}
+            loading={save.isPending}
+            disabled={!form.title || !form.description || !form.classKey}
+          />
+          {id && <Button variant="ghost" label="Cancel" onPress={cancel} />}
+        </>
+      ) : readOnly ? (
+        <Card tone="infoSoft">
+          <ThemedText type="smallBold">Past class — read-only</ThemedText>
+          <ThemedText type="small">
+            You no longer teach this class, so this activity can&apos;t be changed. Ask your school admin if that&apos;s a mistake.
+          </ThemedText>
+        </Card>
+      ) : (
+        <Button label="Edit activity" onPress={() => setEditing(true)} />
+      )}
+      {id && !editing && !readOnly && (
         <Button
           variant={archived ? 'secondary' : 'danger'}
           label={archived ? 'Restore activity' : 'Archive activity'}

@@ -74,7 +74,7 @@ export default function PendingScreen() {
       </View>
       <Card>
         <ThemedText>
-          Hi {user?.displayName}! {info.body}
+          Hi {user?.firstName}! {info.body}
         </ThemedText>
         <ThemedText type="small" themeColor="textSecondary">
           Signed in as @{user?.username} ({user?.email})

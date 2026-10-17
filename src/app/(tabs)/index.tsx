@@ -29,8 +29,11 @@ export default function HomeScreen() {
   if (!child) {
     return (
       <Screen tab>
-        <ThemedText type="title">Welcome, {parent?.displayName} 👋</ThemedText>
-        <EmptyState title="No child connected yet" message="Connect your child with the student code from their school." />
+        <ThemedText type="title">Welcome, {parent?.firstName} 👋</ThemedText>
+        <EmptyState
+          title="No child connected yet"
+          message="Ask your child's teacher for a one-time connection code, then connect with it and your child's birth date."
+        />
         <Button label="Connect a Child" onPress={() => router.push('/connect-child')} />
       </Screen>
     );
@@ -41,7 +44,7 @@ export default function HomeScreen() {
       <View style={styles.header}>
         <View style={styles.flex}>
           <ThemedText type="small" themeColor="textSecondary">
-            {greeting()}, {parent?.displayName}
+            {greeting()}, {parent?.firstName} 👋
           </ThemedText>
           <ThemedText type="title">{child.firstName}&apos;s day</ThemedText>
         </View>

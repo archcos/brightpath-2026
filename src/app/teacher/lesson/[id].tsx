@@ -5,16 +5,19 @@ import { StyleSheet, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { DateField } from '@/components/ui/date-field';
 import { ErrorState, Loading } from '@/components/ui/query-state';
 import { Screen } from '@/components/ui/screen';
 import { Select } from '@/components/ui/select';
 import { TextField } from '@/components/ui/text-field';
 import { Spacing } from '@/constants/theme';
-import { useArchiveLesson, useSaveLesson, useTeacherClasses, useTeacherLesson } from '@/hooks/teacher-queries';
+import { useArchiveLesson, useSaveLesson, useTeacherClasses,
+  useTeacherPastClasses, useTeacherLesson } from '@/hooks/teacher-queries';
 import { ApiError, errorMessage } from '@/services/api';
 import type { ClassAssignment, LessonInput } from '@/types/api';
-import { confirmDestructive } from '@/utils/confirm';
-import { formatRelativeDay, formatTime, maskDate, plural, toISODate } from '@/utils/format';
+import { classKey, classOptions } from '@/utils/classes';
+import { confirmAction, confirmDestructive } from '@/utils/confirm';
+import { durationOptions, formatRelativeDay, formatTime, toISODate } from '@/utils/format';
 
 type Form = {
   classKey: string;
@@ -39,7 +42,7 @@ const FIELD_LABEL: Record<string, string> = {
   subjectId: 'Class',
   title: 'Lesson title',
   startsAt: 'Date & time',
-  durationMin: 'Minutes',
+  durationMin: 'Duration',
   summary: 'What they learned',
   rememberThis: 'Remember this',
   askChild: 'Ask your child',
@@ -90,10 +93,12 @@ function parsePoints(text: string) {
 
 /** Loads the lesson (when editing), then mounts the form with its initial values. */
 export default function LessonEditor() {
-  const { id: idParam } = useLocalSearchParams<{ id: string }>();
+  // `classKey`: the class the dashboard was showing, used as the default for a new item.
+  const { id: idParam, classKey: presetClass } = useLocalSearchParams<{ id: string; classKey?: string }>();
   const id = idParam === 'new' ? null : Number(idParam);
   const invalidId = id !== null && !(Number.isInteger(id) && id > 0);
   const classes = useTeacherClasses();
+  const pastClasses = useTeacherPastClasses();
   const existing = useTeacherLesson(invalidId ? null : id);
 
   if (invalidId) return <ErrorState error={new Error('This lesson link is not valid.')} />;
@@ -118,7 +123,10 @@ export default function LessonEditor() {
         askChild: l.askChild ?? '',
         tryTogether: l.tryTogether ?? '',
       }
-    : { ...empty(), classKey: first ? `${first.sectionId}:${first.subject.id}` : '' };
+    : {
+        ...empty(),
+        classKey: classes.data?.some((c) => classKey(c) === presetClass) ? presetClass! : first ? classKey(first) : '',
+      };
 
   return (
     <LessonForm
@@ -126,6 +134,7 @@ export default function LessonEditor() {
       id={id}
       initial={initial}
       classes={classes.data ?? []}
+      pastClasses={pastClasses.data ?? []}
       archived={l?.archived ?? false}
       aiAutoPublishAt={l?.aiDraftAt ? l.autoPublishAt : null}
     />
@@ -136,21 +145,42 @@ type LessonFormProps = {
   id: number | null;
   initial: Form;
   classes: ClassAssignment[];
+  /** Classes the teacher no longer teaches: their items open read-only. */
+  pastClasses: ClassAssignment[];
   archived: boolean;
   /** Set for an unreviewed AI draft: when it will be published automatically. */
   aiAutoPublishAt: string | null;
 };
 
-function LessonForm({ id, initial, classes, archived, aiAutoPublishAt }: LessonFormProps) {
+function LessonForm({ id, initial, classes, pastClasses, archived, aiAutoPublishAt }: LessonFormProps) {
   const save = useSaveLesson();
   const archive = useArchiveLesson();
   const [form, setForm] = useState<Form>(initial);
   const [error, setError] = useState<string>();
+  // Existing items open read-only so they can be read first; new ones start in edit mode.
+  const [editing, setEditing] = useState(id === null);
+  // An item from a past class (e.g. last school year) can be read but not changed; the server refuses edits too.
+  const readOnly = id !== null && !classes.some((c) => classKey(c) === initial.classKey);
+  const ownPastClass = readOnly ? pastClasses.filter((c) => classKey(c) === initial.classKey) : [];
+
+  const cancel = () => {
+    setForm(initial);
+    setError(undefined);
+    setEditing(false);
+  };
 
   const set = <K extends keyof Form>(key: K) => (value: Form[K]) => setForm((f) => ({ ...f, [key]: value }));
 
   const submit = async () => {
     setError(undefined);
+    const ok = await confirmAction(
+      id ? 'Save changes?' : 'Create lesson?',
+      form.summaryStatus === 'ready'
+        ? 'The summary is published: parents of every student in this class will see it.'
+        : 'It stays a draft: parents see the lesson but not the summary yet.',
+      id ? 'Save' : 'Create',
+    );
+    if (!ok) return;
     const [sectionId, subjectId] = form.classKey.split(':').map(Number);
     const input: LessonInput = {
       sectionId,
@@ -191,7 +221,7 @@ function LessonForm({ id, initial, classes, archived, aiAutoPublishAt }: LessonF
 
   return (
     <Screen>
-      <Stack.Screen options={{ title: id ? 'Edit Lesson' : 'New Lesson' }} />
+      <Stack.Screen options={{ title: !id ? 'New Lesson' : editing ? 'Edit Lesson' : 'Lesson' }} />
       {archived && (
         <Card tone="warningSoft">
           <ThemedText type="smallBold">This lesson is archived</ThemedText>
@@ -213,26 +243,28 @@ function LessonForm({ id, initial, classes, archived, aiAutoPublishAt }: LessonF
           label="Class"
           placeholder="Choose a class"
           searchPlaceholder="Search subject, grade or section"
-          options={classes.map((c) => ({
-            value: `${c.sectionId}:${c.subject.id}`,
-            label: `${c.subject.name} • Grade ${c.grade} ${c.section}`,
-            description: plural(c.studentCount, 'student'),
-          }))}
+          options={classOptions(classes, ownPastClass)}
           value={form.classKey}
           onChange={set('classKey')}
+          disabled={!editing}
         />
-        <TextField label="Lesson title" value={form.title} onChangeText={set('title')} maxLength={160} />
+        <TextField label="Lesson title" wrap maxLines={3} editable={editing} value={form.title} onChangeText={set('title')} maxLength={160} />
         <View style={styles.row}>
           <View style={styles.flex}>
-            <TextField label="Date" placeholder="YYYY-MM-DD" value={form.date} onChangeText={(t) => set('date')(maskDate(t))} keyboardType="number-pad" maxLength={10} />
+            <DateField label="Date" mode="date" value={form.date} onChange={set('date')} disabled={!editing} />
           </View>
           <View style={styles.flex}>
-            <TextField label="Start time" placeholder="HH:MM" value={form.time} onChangeText={set('time')} maxLength={5} />
-          </View>
-          <View style={styles.flex}>
-            <TextField label="Minutes" keyboardType="number-pad" value={form.durationMin} onChangeText={set('durationMin')} maxLength={3} />
+            <DateField label="Start time" mode="time" value={form.time} onChange={set('time')} disabled={!editing} />
           </View>
         </View>
+        <Select
+          label="Duration (how long the lesson lasted)"
+          options={durationOptions(form.durationMin)}
+          value={form.durationMin}
+          onChange={set('durationMin')}
+          searchable={false}
+          disabled={!editing}
+        />
       </Card>
 
       <Card>
@@ -248,19 +280,22 @@ function LessonForm({ id, initial, classes, archived, aiAutoPublishAt }: LessonF
           ]}
           value={form.summaryStatus}
           onChange={set('summaryStatus')}
+          disabled={!editing}
         />
-        <TextField label="What they learned" multiline value={form.summary} onChangeText={set('summary')} maxLength={5000} />
+        <TextField label="What they learned" multiline minLines={6} maxLines={Infinity} editable={editing} value={form.summary} onChangeText={set('summary')} maxLength={5000} />
         <TextField
           label="Key learning points (one per line, optional emoji first)"
           multiline
+          editable={editing}
+          maxLength={2600}
           placeholder={'🌱 Roots absorb water\n🍃 Leaves make food'}
           value={form.keyPoints}
           onChangeText={set('keyPoints')}
         />
-        <TextField label="Important words (comma-separated)" value={form.words} onChangeText={set('words')} />
-        <TextField label="Remember this" multiline value={form.rememberThis} onChangeText={set('rememberThis')} maxLength={1000} />
-        <TextField label="Ask your child" value={form.askChild} onChangeText={set('askChild')} maxLength={255} />
-        <TextField label="Try together" value={form.tryTogether} onChangeText={set('tryTogether')} maxLength={255} />
+        <TextField label="Important words (comma-separated)" wrap maxLines={3} editable={editing} value={form.words} onChangeText={set('words')} maxLength={1300} />
+        <TextField label="Remember this" multiline minLines={3} maxLines={6} editable={editing} value={form.rememberThis} onChangeText={set('rememberThis')} maxLength={1000} />
+        <TextField label="Ask your child" wrap editable={editing} value={form.askChild} onChangeText={set('askChild')} maxLength={255} />
+        <TextField label="Try together" wrap editable={editing} value={form.tryTogether} onChangeText={set('tryTogether')} maxLength={255} />
       </Card>
 
       {error && (
@@ -268,8 +303,22 @@ function LessonForm({ id, initial, classes, archived, aiAutoPublishAt }: LessonF
           {error}
         </ThemedText>
       )}
-      <Button label={id ? 'Save changes' : 'Create lesson'} onPress={submit} loading={save.isPending} disabled={!form.title || !form.classKey} />
-      {id && (
+      {editing ? (
+        <>
+          <Button label={id ? 'Save changes' : 'Create lesson'} onPress={submit} loading={save.isPending} disabled={!form.title || !form.classKey} />
+          {id && <Button variant="ghost" label="Cancel" onPress={cancel} />}
+        </>
+      ) : readOnly ? (
+        <Card tone="infoSoft">
+          <ThemedText type="smallBold">Past class — read-only</ThemedText>
+          <ThemedText type="small">
+            You no longer teach this class, so this lesson can&apos;t be changed. Ask your school admin if that&apos;s a mistake.
+          </ThemedText>
+        </Card>
+      ) : (
+        <Button label="Edit lesson" onPress={() => setEditing(true)} />
+      )}
+      {id && !editing && !readOnly && (
         <Button
           variant={archived ? 'secondary' : 'danger'}
           label={archived ? 'Restore lesson' : 'Archive lesson'}

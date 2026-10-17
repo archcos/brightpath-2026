@@ -12,7 +12,7 @@ import {
 } from '@/services/api';
 import { authApi, meApi, type AccountType } from '@/services/brightpath';
 import { storage } from '@/services/storage';
-import type { Child, Permissions, TeacherProfile, User } from '@/types/api';
+import type { Child, Permissions, PersonName, Sex, TeacherProfile, User } from '@/types/api';
 
 const TOKEN_KEY = 'brightpath.token';
 /** Renew the session token once it's older than this, so devices in regular use stay signed in. */
@@ -31,8 +31,8 @@ function issuedAt(token: string): number | null {
   }
 }
 
-type SignUpInput = {
-  displayName: string;
+type SignUpInput = PersonName & {
+  sex: Sex;
   email: string;
   username: string;
   password: string;

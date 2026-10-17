@@ -3,6 +3,8 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet } from 'react-native';
 
+import { EMPTY_NAME, isNameComplete, NameFields, toPersonName } from '@/components/name-fields';
+import { SexField } from '@/components/sex-field';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -13,6 +15,7 @@ import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth-context';
 import { errorMessage } from '@/services/api';
 import { publicApi, type AccountType } from '@/services/brightpath';
+import type { Sex } from '@/types/api';
 
 // Same rule as the server: no '@', so login can tell usernames from emails.
 const USERNAME = /^[a-z0-9._]{3,30}$/;
@@ -35,7 +38,8 @@ export default function SignUpScreen() {
   const schools = useQuery({ queryKey: ['public', 'schools'], queryFn: () => publicApi.schools().then((r) => r.schools) });
   const [accountType, setAccountType] = useState<AccountType>('parent');
   const [schoolId, setSchoolId] = useState('');
-  const [name, setName] = useState('');
+  const [name, setName] = useState(EMPTY_NAME);
+  const [sex, setSex] = useState<Sex | ''>('');
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -48,7 +52,8 @@ export default function SignUpScreen() {
     username && !USERNAME.test(username.trim().toLowerCase()) ? '3–30 letters, numbers, dots or underscores' : undefined;
   const emailError = email.trim() && !EMAIL.test(email.trim()) ? 'Enter a valid email address' : undefined;
   const canSubmit =
-    !!name.trim() &&
+    isNameComplete(name) &&
+    !!sex &&
     EMAIL.test(email.trim()) &&
     USERNAME.test(username.trim().toLowerCase()) &&
     password.length >= 8 &&
@@ -61,7 +66,8 @@ export default function SignUpScreen() {
     setLoading(true);
     try {
       await signUp({
-        displayName: name.trim(),
+        ...toPersonName(name),
+        sex: sex as Sex,
         email: email.trim(),
         username: username.trim().toLowerCase(),
         password,
@@ -97,7 +103,8 @@ export default function SignUpScreen() {
             onChange={setSchoolId}
           />
         )}
-        <TextField label="Your name" value={name} onChangeText={setName} autoComplete="name" textContentType="name" />
+        <NameFields value={name} onChange={setName} own />
+        <SexField value={sex} onChange={setSex} />
         <TextField
           label="Email"
           value={email}
@@ -106,6 +113,7 @@ export default function SignUpScreen() {
           autoComplete="email"
           keyboardType="email-address"
           textContentType="emailAddress"
+          maxLength={255}
           error={emailError}
         />
         <TextField

@@ -66,6 +66,7 @@ export default function SignInScreen() {
           autoComplete="username"
           keyboardType="email-address"
           textContentType="username"
+          maxLength={255}
           returnKeyType="next"
         />
         <TextField
@@ -75,6 +76,7 @@ export default function SignInScreen() {
           secureTextEntry
           autoComplete="current-password"
           textContentType="password"
+          maxLength={72}
           returnKeyType="go"
           onSubmitEditing={submit}
         />
@@ -86,6 +88,9 @@ export default function SignInScreen() {
           </View>
         )}
         <Button label="Sign in" onPress={submit} loading={loading} disabled={!canSubmit} />
+        <Link href={{ pathname: '/forgot-password', params: { login: login.trim() } }} style={styles.link}>
+          <ThemedText type="link">Forgot password?</ThemedText>
+        </Link>
       </Card>
 
       <Link href="/sign-up" style={styles.link}>

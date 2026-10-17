@@ -26,7 +26,7 @@ export default function SuperHome() {
   const [tab, setTab] = useState<Tab>('admins');
   return (
     <Screen tab>
-      <StaffHeader title="BrightPath Admin" subtitle="Schools, school admins and permissions." />
+      <StaffHeader eyebrow="BrightPath Admin" subtitle="Schools, school admins and permissions." />
       <Segmented<Tab>
         options={[
           { value: 'admins', label: 'School admins' },
@@ -136,7 +136,7 @@ function UsersTab() {
           onChange={setSchoolId}
         />
       </FilterRow>
-      <TextField label="Search" placeholder="Name, username or email" value={q} onChangeText={setQ} autoCapitalize="none" />
+      <TextField label="Search" placeholder="Name, username or email" value={q} onChangeText={setQ} autoCapitalize="none" maxLength={100} />
       {isLoading ? (
         <Loading />
       ) : error || !data ? (
@@ -218,7 +218,7 @@ function SchoolsTab() {
       )}
       <Card>
         <ThemedText type="subtitle">Add school</ThemedText>
-        <TextField label="School name" value={name} onChangeText={setName} maxLength={160} />
+        <TextField label="School name" wrap maxLines={2} value={name} onChangeText={setName} maxLength={160} />
         {create.error && (
           <ThemedText type="caption" themeColor="danger">
             {create.error.message}

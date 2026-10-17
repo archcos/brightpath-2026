@@ -5,14 +5,13 @@ import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Screen } from '@/components/ui/screen';
+import { DateField } from '@/components/ui/date-field';
 import { TextField } from '@/components/ui/text-field';
 import { useAuth } from '@/context/auth-context';
 import { useChild } from '@/context/child-context';
 import { errorMessage } from '@/services/api';
 import { meApi } from '@/services/brightpath';
-import { isValidISODate, maskDate, maskStudentCode, toISODate } from '@/utils/format';
-
-const CODE = /^BRP-\d{6}$/;
+import { CONNECTION_CODE, isValidISODate, maskConnectionCode, toISODate } from '@/utils/format';
 
 export default function ConnectChildScreen() {
   const { refresh } = useAuth();
@@ -22,9 +21,8 @@ export default function ConnectChildScreen() {
   const [error, setError] = useState<string>();
   const [loading, setLoading] = useState(false);
 
-  const dateComplete = birthDate.length === 10;
   const dateValid = isValidISODate(birthDate) && birthDate <= toISODate(new Date());
-  const valid = CODE.test(code) && dateValid;
+  const valid = CONNECTION_CODE.test(code) && dateValid;
 
   const submit = async () => {
     if (!valid || loading) return;
@@ -48,29 +46,26 @@ export default function ConnectChildScreen() {
       <Card tone="primarySoft">
         <ThemedText type="smallBold">🔐 Where do I find these?</ThemedText>
         <ThemedText type="small">
-          Your child&apos;s school gives you a student code (like BRP-123456). You&apos;ll also need your child&apos;s birth
-          date — both are required so only your family can connect.
+          Your child&apos;s teacher or school gives you a one-time code (like ABCD-2345). Enter it with your child&apos;s
+          birth date. Each code works for one parent, once — if another family member needs access, ask for their own code.
         </ThemedText>
       </Card>
       <TextField
-        label="Student code"
-        placeholder="BRP-123456"
+        label="Connection code"
+        placeholder="ABCD-2345"
         value={code}
-        onChangeText={(t) => setCode(maskStudentCode(t))}
+        onChangeText={(t) => setCode(maskConnectionCode(t))}
         autoCapitalize="characters"
         autoCorrect={false}
-        maxLength={10}
+        autoComplete="off"
+        maxLength={9}
       />
-      <TextField
+      <DateField
         label="Child's birth date"
-        placeholder="YYYY-MM-DD"
+        mode="date"
         value={birthDate}
-        onChangeText={(t) => setBirthDate(maskDate(t))}
-        keyboardType="number-pad"
-        maxLength={10}
-        error={dateComplete && !dateValid ? 'Enter a real date in the past, e.g. 2018-11-02' : undefined}
-        returnKeyType="go"
-        onSubmitEditing={submit}
+        onChange={setBirthDate}
+        max={toISODate(new Date())}
       />
       {error && (
         <ThemedText type="small" themeColor="danger" accessibilityLiveRegion="polite">

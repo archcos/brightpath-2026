@@ -15,6 +15,8 @@ import type {
   NotificationType,
   Overview,
   Pendant,
+  PendantKey,
+  PersonName,
   Permission,
   Permissions,
   Recording,
@@ -22,6 +24,9 @@ import type {
   Saved,
   School,
   Section,
+  Sex,
+  StudentCode,
+  StudentDetail,
   SuperUserDetail,
   TeacherActivity,
   TeacherActivityDetail,
@@ -54,8 +59,8 @@ const child = (id: number) => `/children/${id}`;
 export const authApi = {
   /** `login` is an email or a username. */
   login: (login: string, password: string) => api<AuthResponse>('/auth/login', { method: 'POST', json: { login, password } }),
-  register: (input: {
-    displayName: string;
+  register: (input: PersonName & {
+    sex: Sex;
     email: string;
     username: string;
     password: string;
@@ -65,8 +70,13 @@ export const authApi = {
     api<AuthResponse>('/auth/register', { method: 'POST', json: input }),
   /** Revokes this device's session on the server. */
   logout: () => api<void>('/auth/logout', { method: 'POST' }),
-  /** Renews the current session and returns a token with a later expiry. */
+  /** A fresh token for the current session. The expiry stays the same: a sign-in lasts 90 days. */
   refresh: () => api<{ token: string }>('/auth/refresh', { method: 'POST' }),
+  /** Emails a 6-digit reset code if the account exists (the server answers the same either way). */
+  forgotPassword: (login: string) => api<void>('/auth/forgot-password', { method: 'POST', json: { login } }),
+  /** Sets a new password with the emailed code; every device is signed out. */
+  resetPassword: (login: string, code: string, password: string) =>
+    api<void>('/auth/reset-password', { method: 'POST', json: { login, code, password } }),
 };
 
 export const publicApi = {
@@ -76,8 +86,9 @@ export const publicApi = {
 export const meApi = {
   get: () =>
     api<{ user: User; children: Child[]; teacher: TeacherProfile | null; permissions: Permissions | null }>('/me'),
-  connectChild: (studentCode: string, birthDate: string) =>
-    api<{ child: Child }>('/me/children', { method: 'POST', json: { studentCode, birthDate } }),
+  /** `code` is a one-time connection code ("ABCD-2345") from the child's teacher or school admin. */
+  connectChild: (code: string, birthDate: string) =>
+    api<{ child: Child }>('/me/children', { method: 'POST', json: { code, birthDate } }),
   preferences: () => api<{ preferences: Record<NotificationType, boolean> }>('/me/notification-preferences'),
   setPreferences: (prefs: Partial<Record<NotificationType, boolean>>) =>
     api<{ preferences: Record<NotificationType, boolean> }>('/me/notification-preferences', { method: 'PUT', json: prefs }),
@@ -113,8 +124,52 @@ export const childApi = {
   readAllNotifications: (id: number) => api<void>(`${child(id)}/notifications/read-all`, { method: 'POST' }),
 };
 
+/** A generated file (template or code list), base64-encoded so the app saves it the same way everywhere. */
+export type FilePayload = { filename: string; mimeType: string; base64: string };
+
+export type StudentFilters = { sectionId?: number; status?: AdminStudent['status'] };
+
+/**
+ * Students, their one-time parent codes and parent links. Teachers (their sections) and school admins
+ * (their school) use the same endpoints under their own prefix; the server applies the scope.
+ */
+const rosterApi = (base: '/teacher' | '/admin') => ({
+  students: (filters: StudentFilters) =>
+    api<{ students: AdminStudent[] }>(
+      `${base}/students${qs({ sectionId: filters.sectionId ? String(filters.sectionId) : undefined, status: filters.status })}`,
+    ),
+  /** Also issues the student's first one-time code. */
+  createStudent: (input: PersonName & { sex: Sex; sectionId: number; birthDate: string }) =>
+    api<{ student: AdminStudent; code: StudentCode }>(`${base}/students`, { method: 'POST', json: input }),
+  student: (id: number) => api<StudentDetail>(`${base}/students/${id}`),
+  issueCode: (id: number) => api<{ code: StudentCode }>(`${base}/students/${id}/codes`, { method: 'POST' }),
+  revokeCode: (id: number, codeId: number) =>
+    api<StudentDetail>(`${base}/students/${id}/codes/${codeId}/revoke`, { method: 'POST' }),
+  removeParent: (id: number, parentId: number) =>
+    api<StudentDetail>(`${base}/students/${id}/parents/${parentId}/remove`, { method: 'POST' }),
+  /** The .xlsx layout for importing students. */
+  importTemplate: () => api<FilePayload>(`${base}/students/import-template`),
+  /** Adds every row of a filled-in template to a section (all or nothing); each gets a one-time code. */
+  importStudents: (input: { sectionId: number; file: string }) =>
+    api<{ created: { student: AdminStudent; code: StudentCode }[] }>(`${base}/students/import`, { method: 'POST', json: input }),
+  /** A code per active student (issued if missing), without birth dates: Excel list or PDF slips. */
+  exportCodes: (sectionId: number, format: 'xlsx' | 'pdf') =>
+    api<FilePayload>(`${base}/sections/${sectionId}/codes-export`, { method: 'POST', json: { format } }),
+});
+
+export type RosterApi = ReturnType<typeof rosterApi>;
+
 export const teacherApi = {
-  classes: () => api<{ classes: ClassAssignment[] }>('/teacher/classes'),
+  ...rosterApi('/teacher'),
+  /** Whether the school lets teachers add sections, which school years are open, and the subject list. */
+  sectionOptions: () =>
+    api<{ allowed: boolean; schoolYears: string[]; subjects: { id: number; code: string; name: string; color: string }[] }>(
+      '/teacher/sections/options',
+    ),
+  addSection: (input: { grade: number; name: string; schoolYear: string; subjectIds: number[] }) =>
+    api<{ classes: ClassAssignment[] }>('/teacher/sections', { method: 'POST', json: input }),
+  /** `classes`: taught now (post and manage students). `pastClasses`: earlier years / ended, read-only. */
+  classes: () => api<{ classes: ClassAssignment[]; pastClasses: ClassAssignment[] }>('/teacher/classes'),
   /** The pendant this teacher wears, or null. */
   pendant: () => api<{ pendant: Pendant | null }>('/teacher/pendant'),
   notifications: () => api<{ notifications: TeacherNotification[] }>('/teacher/notifications'),
@@ -143,7 +198,7 @@ export const teacherApi = {
 export const adminApi = {
   users: (filters: { role?: Role; status?: UserStatus; q?: string }) => api<{ users: User[] }>(`/admin/users${qs(filters)}`),
   user: (id: number) => api<AdminUserDetail>(`/admin/users/${id}`),
-  createUser: (input: { displayName: string; email: string; username: string; password: string; role: 'parent' | 'teacher' }) =>
+  createUser: (input: PersonName & { sex: Sex; email: string; username: string; password: string; role: 'parent' | 'teacher' }) =>
     api<{ user: User }>('/admin/users', { method: 'POST', json: input }),
   updateUser: (id: number, patch: { role?: 'parent' | 'teacher'; status?: UserStatus }) =>
     api<AdminUserDetail>(`/admin/users/${id}`, { method: 'PATCH', json: patch }),
@@ -156,22 +211,23 @@ export const adminApi = {
   /** The response's deviceKey is shown only once: it goes into the pendant's firmware. */
   registerPendant: (code: string) =>
     api<{ pendant: Pendant & { deviceKey: string } }>('/admin/pendants', { method: 'POST', json: { code } }),
-  /** Issues a new upload key for a pendant; the old one stops working. */
+  /** Adds an upload key for a pendant (shown once). Older keys keep working until revoked. */
   newPendantKey: (id: number) => api<{ deviceKey: string }>(`/admin/pendants/${id}/key`, { method: 'POST' }),
+  pendantKeys: (id: number) => api<{ keys: PendantKey[] }>(`/admin/pendants/${id}/keys`),
+  revokePendantKey: (id: number, keyId: number) =>
+    api<{ keys: PendantKey[] }>(`/admin/pendants/${id}/keys/${keyId}/revoke`, { method: 'POST' }),
   takeBackPendant: (id: number) => api<{ pendant: Pendant }>(`/admin/pendants/${id}/take-back`, { method: 'POST' }),
+  settings: () => api<{ teachersAddSections: boolean }>('/admin/settings'),
+  updateSettings: (patch: { teachersAddSections: boolean }) =>
+    api<{ teachersAddSections: boolean }>('/admin/settings', { method: 'PATCH', json: patch }),
   sections: () => api<{ sections: Section[] }>('/admin/sections'),
   createSection: (input: { grade: number; name: string; schoolYear: string }) =>
     api<{ section: Section }>('/admin/sections', { method: 'POST', json: input }),
   updateSection: (id: number, patch: Partial<{ grade: number; name: string; schoolYear: string; status: Section['status'] }>) =>
     api<{ section: Section }>(`/admin/sections/${id}`, { method: 'PATCH', json: patch }),
   subjects: () => api<{ subjects: { id: number; code: string; name: string; color: string }[] }>('/admin/subjects'),
-  students: (filters: { sectionId?: number; status?: AdminStudent['status'] }) =>
-    api<{ students: AdminStudent[] }>(
-      `/admin/students${qs({ sectionId: filters.sectionId ? String(filters.sectionId) : undefined, status: filters.status })}`,
-    ),
-  createStudent: (input: { sectionId: number; firstName: string; lastName: string; birthDate: string }) =>
-    api<{ student: AdminStudent }>('/admin/students', { method: 'POST', json: input }),
-  updateStudent: (id: number, patch: Partial<{ sectionId: number; firstName: string; lastName: string; status: AdminStudent['status'] }>) =>
+  ...rosterApi('/admin'),
+  updateStudent: (id: number, patch: Partial<PersonName & { sectionId: number; status: AdminStudent['status'] }>) =>
     api<{ student: AdminStudent }>(`/admin/students/${id}`, { method: 'PATCH', json: patch }),
 };
 
@@ -185,7 +241,7 @@ export const superApi = {
       `/super/users${qs({ role: filters.role, status: filters.status, q: filters.q, schoolId: filters.schoolId ? String(filters.schoolId) : undefined })}`,
     ),
   user: (id: number) => api<SuperUserDetail>(`/super/users/${id}`),
-  createUser: (input: { displayName: string; email: string; username: string; password: string; role: Role; schoolId?: number }) =>
+  createUser: (input: PersonName & { sex: Sex; email: string; username: string; password: string; role: Role; schoolId?: number }) =>
     api<SuperUserDetail>('/super/users', { method: 'POST', json: input }),
   updateUser: (id: number, patch: { role?: Role; status?: UserStatus; schoolId?: number | null }) =>
     api<SuperUserDetail>(`/super/users/${id}`, { method: 'PATCH', json: patch }),

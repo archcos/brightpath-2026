@@ -26,6 +26,7 @@ import { useTheme } from '@/hooks/use-theme';
 import type { AdminUserDetail, Pendant, UserStatus } from '@/types/api';
 import { confirmDestructive } from '@/utils/confirm';
 import { ROLE_LABEL, roleOptions, STATUS_OPTIONS, STATUS_TONE } from '@/utils/roles';
+import { sectionName } from '@/utils/format';
 
 export default function AdminUserScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -171,7 +172,7 @@ function UserEditor({ data }: { data: AdminUserDetail }) {
           {visibleSections.map((sec) => (
             <View key={sec.id} style={styles.gap}>
               <ThemedText type="smallBold">
-                Grade {sec.grade} • {sec.name} • {sec.schoolYear}
+                {sectionName(sec.grade, sec.name)} • {sec.schoolYear}
               </ThemedText>
               <View style={styles.wrap}>
                 {(subjects.data ?? []).map((sub) => {
@@ -183,7 +184,7 @@ function UserEditor({ data }: { data: AdminUserDetail }) {
                       onPress={() => toggle(key)}
                       accessibilityRole="checkbox"
                       accessibilityState={{ checked: on }}
-                      accessibilityLabel={`${sub.name}, Grade ${sec.grade} ${sec.name}`}
+                      accessibilityLabel={`${sub.name}, ${sectionName(sec.grade, sec.name)}`}
                       style={[
                         styles.pill,
                         { borderColor: on ? sub.color : theme.border, backgroundColor: on ? `${sub.color}22` : 'transparent' },
@@ -226,7 +227,7 @@ function UserEditor({ data }: { data: AdminUserDetail }) {
           ) : (
             data.children.map((c) => (
               <ThemedText key={c.id} type="small">
-                {c.firstName} {c.lastName} — Grade {c.grade} {c.section}
+                {c.fullName} — {sectionName(c.grade, c.section)}
               </ThemedText>
             ))
           )}
@@ -250,7 +251,7 @@ function TeacherPendantCard({ userId, pendant, canManage }: { userId: number; pe
       .map((p) => ({
         value: String(p.id),
         label: p.code,
-        description: `${p.battery}% battery • ${lastSyncLabel(p)}${p.id === pendant?.id ? ' • current' : ''}`,
+        description: `${lastSyncLabel(p)}${p.id === pendant?.id ? ' • current' : ''}`,
       })),
   ];
 

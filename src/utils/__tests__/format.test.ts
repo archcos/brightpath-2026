@@ -1,10 +1,12 @@
 import {
   activityBadge,
+  durationLabel,
+  durationOptions,
   formatRelativeDay,
   formatTimeAgo,
   isValidISODate,
-  maskDate,
-  maskStudentCode,
+  CONNECTION_CODE,
+  maskConnectionCode,
   parseDate,
   plural,
   toISODate,
@@ -26,25 +28,6 @@ describe('parseDate / toISODate', () => {
   });
 });
 
-describe('maskDate', () => {
-  it.each([
-    ['', ''],
-    ['2026', '2026'],
-    ['20261', '2026-1'],
-    ['20261012', '2026-10-12'],
-    ['2026-10-12', '2026-10-12'],
-    ['2026/10/12', '2026-10-12'],
-    ['2026101299', '2026-10-12'],
-  ])('%p → %p', (input, expected) => {
-    expect(maskDate(input)).toBe(expected);
-  });
-
-  it('lets the user backspace through the dash', () => {
-    expect(maskDate('2026-1')).toBe('2026-1');
-    expect(maskDate('2026-')).toBe('2026');
-  });
-});
-
 describe('isValidISODate', () => {
   it.each(['2018-11-02', '2024-02-29', '2026-12-31'])('accepts %p', (value) => {
     expect(isValidISODate(value)).toBe(true);
@@ -55,22 +38,21 @@ describe('isValidISODate', () => {
   });
 });
 
-describe('maskStudentCode', () => {
+describe('maskConnectionCode', () => {
   it.each([
-    ['123456', 'BRP-123456'],
-    ['brp123456', 'BRP-123456'],
-    ['BRP-12', 'BRP-12'],
-    ['BRP-1234567', 'BRP-123456'],
+    ['abcd2345', 'ABCD-2345'],
+    ['ABCD-2345', 'ABCD-2345'],
+    ['abc', 'ABC'],
+    ['abcd2', 'ABCD-2'],
+    ['ABCD-23456789', 'ABCD-2345'],
+    ['O0I1L', ''], // never in a code
   ])('%p → %p', (input, expected) => {
-    expect(maskStudentCode(input)).toBe(expected);
+    expect(maskConnectionCode(input)).toBe(expected);
   });
 
-  it('can be cleared with backspace', () => {
-    let value = 'BRP-1';
-    for (const next of ['BRP-', 'BRP', 'BR', 'B', '']) {
-      value = maskStudentCode(next);
-      expect(value).toBe(next);
-    }
+  it('produces codes the server accepts', () => {
+    expect(CONNECTION_CODE.test(maskConnectionCode('mgwa2753'))).toBe(true);
+    expect(CONNECTION_CODE.test('BRP-1234')).toBe(false);
   });
 });
 
@@ -113,5 +95,22 @@ describe('activityBadge', () => {
     ['upcoming', 'not_started', 'Upcoming', 'info'],
   ] as const)('state %p + status %p → %p', (state, status, label, tone) => {
     expect(activityBadge(state, status)).toEqual({ label, tone });
+  });
+});
+
+describe('durationOptions', () => {
+  it('labels minutes and hours', () => {
+    expect(durationLabel(45)).toBe('45 min');
+    expect(durationLabel(90)).toBe('1 hr 30 min');
+    expect(durationLabel(120)).toBe('2 hr');
+  });
+
+  it('keeps an unusual current length in the list, sorted, within 5–480', () => {
+    const values = durationOptions('32').map((o) => Number(o.value));
+    expect(values).toContain(32);
+    expect(values).toEqual([...values].sort((a, b) => a - b));
+    expect(values[0]).toBe(15);
+    expect(values.at(-1)).toBe(480);
+    expect(durationOptions('999').map((o) => o.value)).not.toContain('999');
   });
 });

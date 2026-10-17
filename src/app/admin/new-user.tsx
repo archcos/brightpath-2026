@@ -1,6 +1,8 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
 
+import { EMPTY_NAME, isNameComplete, NameFields, toPersonName } from '@/components/name-fields';
+import { SexField } from '@/components/sex-field';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -10,7 +12,7 @@ import { TextField } from '@/components/ui/text-field';
 import { useAuth } from '@/context/auth-context';
 import { useCreateUser } from '@/hooks/admin-queries';
 import { errorMessage } from '@/services/api';
-import type { User } from '@/types/api';
+import type { Sex, User } from '@/types/api';
 import { roleOptions } from '@/utils/roles';
 
 type SchoolRole = 'teacher' | 'parent';
@@ -27,7 +29,8 @@ export default function NewUserScreen() {
     ...(permissions?.manage_parents ? (['parent'] as const) : []),
   ]);
   const [role, setRole] = useState<SchoolRole>(roles[0]?.value ?? 'teacher');
-  const [displayName, setDisplayName] = useState('');
+  const [name, setName] = useState(EMPTY_NAME);
+  const [sex, setSex] = useState<Sex | ''>('');
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -40,7 +43,8 @@ export default function NewUserScreen() {
     try {
       const { user: created } = await create.mutateAsync({
         role,
-        displayName: displayName.trim(),
+        ...toPersonName(name),
+        sex: sex as Sex,
         email: email.trim(),
         username: username.trim().toLowerCase(),
         password,
@@ -90,8 +94,9 @@ export default function NewUserScreen() {
           The teacher will belong to {user?.school?.name}. Assign their classes after creating the account.
         </ThemedText>
       )}
-      <TextField label="Name" value={displayName} onChangeText={setDisplayName} maxLength={80} />
-      <TextField label="Email" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" />
+      <NameFields value={name} onChange={setName} />
+      <SexField value={sex} onChange={setSex} />
+      <TextField label="Email" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" maxLength={255} />
       <TextField
         label="Username"
         placeholder="e.g. juan.delacruz"
@@ -122,7 +127,7 @@ export default function NewUserScreen() {
         label="Create account"
         onPress={submit}
         loading={create.isPending}
-        disabled={!displayName.trim() || !email.trim() || !usernameValid || password.length < 8}
+        disabled={!isNameComplete(name) || !sex || !email.trim() || !usernameValid || password.length < 8}
       />
     </Screen>
   );

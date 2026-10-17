@@ -8,8 +8,10 @@ const keys = {
   users: (f: object) => ['admin', 'users', f] as const,
   user: (id: number) => ['admin', 'user', id] as const,
   sections: ['admin', 'sections'] as const,
+  settings: ['admin', 'settings'] as const,
   subjects: ['admin', 'subjects'] as const,
   pendants: ['admin', 'pendants'] as const,
+  pendantKeys: (id: number) => ['admin', 'pendant-keys', id] as const,
   students: (f: object) => ['admin', 'students', f] as const,
 };
 
@@ -22,6 +24,8 @@ export const useAdminUsers = (filters: { role?: 'parent' | 'teacher' | 'admin'; 
   });
 
 export const useAdminUser = (id: number) => useQuery({ queryKey: keys.user(id), queryFn: () => adminApi.user(id) });
+
+export const useSchoolSettings = () => useQuery({ queryKey: keys.settings, queryFn: adminApi.settings });
 
 export const useSections = () =>
   useQuery({ queryKey: keys.sections, queryFn: () => adminApi.sections().then((r) => r.sections) });
@@ -59,8 +63,14 @@ export const useAssignPendant = () =>
   );
 export const useTakeBackPendant = () => useAdminMutation(adminApi.takeBackPendant);
 export const useNewPendantKey = () => useAdminMutation(adminApi.newPendantKey);
+/** A pendant's upload keys and which device each is locked to. */
+export const usePendantKeys = (id: number) =>
+  useQuery({ queryKey: keys.pendantKeys(id), queryFn: () => adminApi.pendantKeys(id).then((r) => r.keys) });
+export const useRevokePendantKey = () =>
+  useAdminMutation(({ id, keyId }: { id: number; keyId: number }) => adminApi.revokePendantKey(id, keyId));
 
 export const useCreateSection = () => useAdminMutation(adminApi.createSection);
+export const useUpdateSchoolSettings = () => useAdminMutation(adminApi.updateSettings);
 export const useUpdateSection = () =>
   useAdminMutation(({ id, patch }: { id: number; patch: Parameters<typeof adminApi.updateSection>[1] }) =>
     adminApi.updateSection(id, patch),
