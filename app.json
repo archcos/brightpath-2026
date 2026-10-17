@@ -18,7 +18,7 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.newbrightpath.brightpath",
+      "package": "com.brightpath.brightpath",
       "googleServicesFile": "./google-services.json"
     },
     "web": {

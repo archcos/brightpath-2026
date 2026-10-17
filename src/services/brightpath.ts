@@ -74,6 +74,9 @@ export const authApi = {
   refresh: () => api<{ token: string }>('/auth/refresh', { method: 'POST' }),
   /** Emails a 6-digit reset code if the account exists (the server answers the same either way). */
   forgotPassword: (login: string) => api<void>('/auth/forgot-password', { method: 'POST', json: { login } }),
+  /** Checks the emailed code without using it up (a wrong one counts toward its 5 tries). */
+  verifyResetCode: (login: string, code: string) =>
+    api<void>('/auth/verify-reset-code', { method: 'POST', json: { login, code } }),
   /** Sets a new password with the emailed code; every device is signed out. */
   resetPassword: (login: string, code: string, password: string) =>
     api<void>('/auth/reset-password', { method: 'POST', json: { login, code, password } }),
