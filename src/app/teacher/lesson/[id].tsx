@@ -14,7 +14,7 @@ import { useArchiveLesson, useSaveLesson, useTeacherClasses, useTeacherLesson } 
 import { ApiError, errorMessage } from '@/services/api';
 import type { ClassAssignment, LessonInput } from '@/types/api';
 import { confirmDestructive } from '@/utils/confirm';
-import { maskDate, plural, toISODate } from '@/utils/format';
+import { formatRelativeDay, formatTime, maskDate, plural, toISODate } from '@/utils/format';
 
 type Form = {
   classKey: string;
@@ -121,13 +121,27 @@ export default function LessonEditor() {
     : { ...empty(), classKey: first ? `${first.sectionId}:${first.subject.id}` : '' };
 
   return (
-    <LessonForm key={id ?? 'new'} id={id} initial={initial} classes={classes.data ?? []} archived={l?.archived ?? false} />
+    <LessonForm
+      key={id ?? 'new'}
+      id={id}
+      initial={initial}
+      classes={classes.data ?? []}
+      archived={l?.archived ?? false}
+      aiAutoPublishAt={l?.aiDraftAt ? l.autoPublishAt : null}
+    />
   );
 }
 
-type LessonFormProps = { id: number | null; initial: Form; classes: ClassAssignment[]; archived: boolean };
+type LessonFormProps = {
+  id: number | null;
+  initial: Form;
+  classes: ClassAssignment[];
+  archived: boolean;
+  /** Set for an unreviewed AI draft: when it will be published automatically. */
+  aiAutoPublishAt: string | null;
+};
 
-function LessonForm({ id, initial, classes, archived }: LessonFormProps) {
+function LessonForm({ id, initial, classes, archived, aiAutoPublishAt }: LessonFormProps) {
   const save = useSaveLesson();
   const archive = useArchiveLesson();
   const [form, setForm] = useState<Form>(initial);
@@ -182,6 +196,15 @@ function LessonForm({ id, initial, classes, archived }: LessonFormProps) {
         <Card tone="warningSoft">
           <ThemedText type="smallBold">This lesson is archived</ThemedText>
           <ThemedText type="small">Parents can&apos;t see it. Restore it to make it visible again.</ThemedText>
+        </Card>
+      )}
+      {aiAutoPublishAt && !archived && (
+        <Card tone="infoSoft">
+          <ThemedText type="smallBold">🤖 AI draft from your recording</ThemedText>
+          <ThemedText type="small">
+            Check the summary below, then publish it. If you don&apos;t, it&apos;s shared with parents automatically at{' '}
+            {formatTime(aiAutoPublishAt)} ({formatRelativeDay(aiAutoPublishAt)}).
+          </ThemedText>
         </Card>
       )}
 

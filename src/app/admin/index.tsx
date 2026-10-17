@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 
 import { PendantStatus } from '@/components/pendant-status';
 import { StaffHeader } from '@/components/staff-header';
@@ -19,6 +19,7 @@ import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import {
   useAdminUsers,
   useCreateSection,
+  useNewPendantKey,
   usePendants,
   useRegisterPendant,
   useSections,
@@ -356,16 +357,35 @@ function PendantsTab({ perms }: { perms: Permissions }) {
   const { data, isLoading, error, refetch } = usePendants();
   const register = useRegisterPendant();
   const takeBack = useTakeBackPendant();
+  const newKey = useNewPendantKey();
   const [code, setCode] = useState('');
+  // The server returns a device key only once; it's kept here until the admin leaves the tab.
+  const [shownKey, setShownKey] = useState<{ code: string; key: string }>();
   const canManage = perms.manage_teachers;
   const available = (data ?? []).filter((p) => !p.teacher).length;
 
   const add = async () => {
     try {
-      await register.mutateAsync(code.trim().toUpperCase());
+      const { pendant } = await register.mutateAsync(code.trim().toUpperCase());
+      setShownKey({ code: pendant.code, key: pendant.deviceKey });
       setCode('');
     } catch {
       // Shown below via register.error.
+    }
+  };
+
+  const confirmNewKey = async (p: Pendant) => {
+    const ok = await confirmDestructive(
+      `New upload key for ${p.code}?`,
+      'The old key stops working right away. Put the new key into the pendant so it can keep uploading lessons.',
+      'New key',
+    );
+    if (!ok) return;
+    try {
+      const { deviceKey } = await newKey.mutateAsync(p.id);
+      setShownKey({ code: p.code, key: deviceKey });
+    } catch {
+      // Shown above via newKey.error.
     }
   };
 
@@ -388,10 +408,22 @@ function PendantsTab({ perms }: { perms: Permissions }) {
         Parents never see pendants.
       </ThemedText>
       {!canManage && <ReadOnlyNote what="pendants" />}
-      {takeBack.error && (
+      {(takeBack.error || newKey.error) && (
         <ThemedText type="caption" themeColor="danger">
-          {takeBack.error.message}
+          {(takeBack.error ?? newKey.error)!.message}
         </ThemedText>
+      )}
+      {shownKey && (
+        <Card tone="warningSoft">
+          <ThemedText type="smallBold">Upload key for {shownKey.code}</ThemedText>
+          <ThemedText type="small" selectable style={styles.key}>
+            {shownKey.key}
+          </ThemedText>
+          <ThemedText type="caption">
+            Copy it into the pendant&apos;s settings now. It won&apos;t be shown again; if it&apos;s lost, make a new key.
+          </ThemedText>
+          <Button small variant="secondary" label="Done" onPress={() => setShownKey(undefined)} />
+        </Card>
       )}
       {isLoading ? (
         <Loading />
@@ -417,6 +449,15 @@ function PendantsTab({ perms }: { perms: Permissions }) {
                     variant="secondary"
                     label="Teacher"
                     onPress={() => router.push({ pathname: '/admin/user/[id]', params: { id: String(p.teacher!.userId) } })}
+                  />
+                )}
+                {canManage && (
+                  <Button
+                    small
+                    variant="ghost"
+                    label="New key"
+                    onPress={() => confirmNewKey(p)}
+                    loading={newKey.isPending && newKey.variables === p.id}
                   />
                 )}
                 {p.teacher && canManage && (
@@ -465,4 +506,5 @@ const styles = StyleSheet.create({
   badges: { gap: Spacing.one, alignItems: 'flex-end' },
   formRow: { flexDirection: 'row', gap: Spacing.two },
   gradeField: { width: 90 },
+  key: { fontFamily: Platform.select({ ios: 'Menlo', default: 'monospace' }) },
 });

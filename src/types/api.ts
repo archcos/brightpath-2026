@@ -204,6 +204,10 @@ export type TeacherLesson = {
   startsAt: string;
   durationMin: number;
   summaryStatus: 'preparing' | 'ready';
+  /** Set when the recording pipeline wrote the summary draft. */
+  aiDraftAt: string | null;
+  /** When an unreviewed draft is published to parents automatically (null once published). */
+  autoPublishAt: string | null;
   archived: boolean;
   sectionId: number;
   section: string;
@@ -218,6 +222,20 @@ export type TeacherLessonDetail = TeacherLesson & {
   keyPoints: { emoji: string; text: string }[];
   words: string[];
 };
+
+/** A teacher's in-app notification, e.g. a reminder to review an AI summary before it is published. */
+export type TeacherNotification = {
+  id: number;
+  type: 'summary_review';
+  title: string;
+  body: string;
+  link: string | null;
+  createdAt: string;
+  read: boolean;
+};
+
+/** A pendant recording that needs the teacher: no lesson matched its time, or processing failed. */
+export type Recording = { id: number; startedAt: string; status: 'unmatched' | 'failed'; error: string | null };
 
 export type LessonInput = {
   sectionId: number;

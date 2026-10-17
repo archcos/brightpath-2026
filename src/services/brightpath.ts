@@ -17,6 +17,7 @@ import type {
   Pendant,
   Permission,
   Permissions,
+  Recording,
   Role,
   Saved,
   School,
@@ -26,6 +27,7 @@ import type {
   TeacherActivityDetail,
   TeacherLesson,
   TeacherLessonDetail,
+  TeacherNotification,
   TeacherProfile,
   User,
   UserStatus,
@@ -115,6 +117,12 @@ export const teacherApi = {
   classes: () => api<{ classes: ClassAssignment[] }>('/teacher/classes'),
   /** The pendant this teacher wears, or null. */
   pendant: () => api<{ pendant: Pendant | null }>('/teacher/pendant'),
+  notifications: () => api<{ notifications: TeacherNotification[] }>('/teacher/notifications'),
+  readNotification: (id: number) => api<void>(`/teacher/notifications/${id}/read`, { method: 'PATCH' }),
+  recordings: () => api<{ recordings: Recording[] }>('/teacher/recordings'),
+  /** Attach a recording to one of the teacher's lessons; it is (re)summarized in the background. */
+  attachRecording: (id: number, lessonId: number) =>
+    api<void>(`/teacher/recordings/${id}`, { method: 'PUT', json: { lessonId } }),
   lessons: () => api<{ lessons: TeacherLesson[] }>('/teacher/lessons'),
   lesson: (id: number) => api<{ lesson: TeacherLessonDetail }>(`/teacher/lessons/${id}`),
   createLesson: (input: LessonInput) => api<{ lesson: TeacherLessonDetail }>('/teacher/lessons', { method: 'POST', json: input }),
@@ -145,7 +153,11 @@ export const adminApi = {
   assignPendant: (userId: number, pendantId: number | null) =>
     api<AdminUserDetail>(`/admin/users/${userId}/pendant`, { method: 'PUT', json: { pendantId } }),
   pendants: () => api<{ pendants: Pendant[] }>('/admin/pendants'),
-  registerPendant: (code: string) => api<{ pendant: Pendant }>('/admin/pendants', { method: 'POST', json: { code } }),
+  /** The response's deviceKey is shown only once: it goes into the pendant's firmware. */
+  registerPendant: (code: string) =>
+    api<{ pendant: Pendant & { deviceKey: string } }>('/admin/pendants', { method: 'POST', json: { code } }),
+  /** Issues a new upload key for a pendant; the old one stops working. */
+  newPendantKey: (id: number) => api<{ deviceKey: string }>(`/admin/pendants/${id}/key`, { method: 'POST' }),
   takeBackPendant: (id: number) => api<{ pendant: Pendant }>(`/admin/pendants/${id}/take-back`, { method: 'POST' }),
   sections: () => api<{ sections: Section[] }>('/admin/sections'),
   createSection: (input: { grade: number; name: string; schoolYear: string }) =>

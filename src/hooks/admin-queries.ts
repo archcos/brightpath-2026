@@ -58,6 +58,7 @@ export const useAssignPendant = () =>
     adminApi.assignPendant(userId, pendantId),
   );
 export const useTakeBackPendant = () => useAdminMutation(adminApi.takeBackPendant);
+export const useNewPendantKey = () => useAdminMutation(adminApi.newPendantKey);
 
 export const useCreateSection = () => useAdminMutation(adminApi.createSection);
 export const useUpdateSection = () =>

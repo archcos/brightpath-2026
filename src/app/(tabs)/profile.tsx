@@ -110,10 +110,6 @@ export default function ProfileScreen() {
         ))}
       </Card>
 
-      <ThemedText type="caption" themeColor="textSecondary" style={{ textAlign: 'center' }}>
-        BrightPath only shows children connected to your account. You can view lessons, assignments, activities and
-        calendar entries — but never change what a teacher recorded.
-      </ThemedText>
       <Button variant="danger" label="Sign out" onPress={confirmSignOut} />
     </Screen>
   );

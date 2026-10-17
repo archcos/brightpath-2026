@@ -11,7 +11,37 @@ const keys = {
   lesson: (id: number) => ['teacher', 'lesson', id] as const,
   activities: ['teacher', 'activities'] as const,
   activity: (id: number) => ['teacher', 'activity', id] as const,
+  notifications: ['teacher', 'notifications'] as const,
+  recordings: ['teacher', 'recordings'] as const,
 };
+
+/** Reminders such as "review your AI summary before midnight". Polled so the 10 PM reminder shows up. */
+export const useTeacherNotifications = () =>
+  useQuery({
+    queryKey: keys.notifications,
+    queryFn: () => teacherApi.notifications().then((r) => r.notifications),
+    refetchInterval: 5 * 60_000,
+  });
+
+export function useReadTeacherNotification() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: teacherApi.readNotification,
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.notifications }),
+  });
+}
+
+/** Recordings with no matching lesson (or that failed), waiting for the teacher to attach them. */
+export const useTeacherRecordings = () =>
+  useQuery({ queryKey: keys.recordings, queryFn: () => teacherApi.recordings().then((r) => r.recordings) });
+
+export function useAttachRecording() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, lessonId }: { id: number; lessonId: number }) => teacherApi.attachRecording(id, lessonId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.all }),
+  });
+}
 
 export const useTeacherClasses = () =>
   useQuery({ queryKey: keys.classes, queryFn: () => teacherApi.classes().then((r) => r.classes) });

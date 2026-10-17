@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+**Always use the `ponytail` skill** (full level) for every coding task: write the smallest change that fully solves it, and keep replies short and easy to read.
+
 BrightPath parent app: Expo SDK 57 / React Native, Expo Router (typed routes), TypeScript (strict), React Compiler. Targets iOS, Android, and web. Parents see their child's AI lesson summaries, activities, calendar and notifications. The backend is a separate repo (`brightpath-server`, Express + MySQL). In development the app calls port 3000 on the machine running Metro (web: the page's host; native: `Constants.expoConfig.hostUri`), so it survives LAN IP changes; set `EXPO_PUBLIC_API_URL` in `.env` to override, and always (with https) for production builds. See [AGENTS.md](AGENTS.md) for the Expo-specific rules (do not trust memorized Expo APIs; check the versioned docs before touching Expo/EAS/RN APIs).
 
 ## Commands
@@ -31,4 +33,5 @@ Run lint, typecheck and `npm test` before declaring a task done.
 - **Theming**: `constants/theme.ts` tokens; `useTheme()` applies the settings override and high contrast; `ThemedText` applies the text-size scale. Use theme tokens and `ThemedText` types rather than hard-coded colors/sizes. Shared primitives live in `components/ui/`, domain components (lesson/activity cards, child switcher) in `components/`.
 - **Dates**: API dates are local wall-clock strings — always parse with `utils/format.ts` `parseDate`, never `new Date(string)`.
 - **Security**: notification links are only followed if they match the in-app allow-list in `app/notifications.tsx`. Never log or persist the token outside `services/storage`.
+- **UI approach (Android + iOS from one codebase)**: build screens from plain React Native parts (`View`, `ThemedText`, `Pressable`, `FlatList`, `expo-image`) plus theme tokens; no third-party UI kits (Paper, Tamagui, Gluestack, NativeWind). Use built-ins for standard controls (Expo Router tabs/headers, `@expo/ui` pickers/switches/sheets) and custom components only for BrightPath-specific UI (lesson/activity cards, child switcher, pendant status). `@expo/ui` differs per platform (SwiftUI vs Jetpack Compose), so use it only when a native control is really needed and wrap it once in `name.ios.tsx` + `name.android.tsx` so screens use a single component. Prefer cross-platform Expo libraries and check changes on both Android and iOS.
 - **Native config**: no `ios/`/`android/` dirs (CNG); configure via `app.json` and config plugins.
