@@ -6,12 +6,16 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": { "ORG_GRADLE_PROJECT_reactNativeArchitectures": "arm64-v8a" }
     },
     "preview": {
       "distribution": "internal",
       "android": { "buildType": "apk" },
-      "env": { "EXPO_PUBLIC_API_URL": "https://brightpath-backend-cup5.onrender.com" }
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://brightpath-backend-cup5.onrender.com",
+        "ORG_GRADLE_PROJECT_reactNativeArchitectures": "armeabi-v7a,arm64-v8a"
+      }
     },
     "production": {
       "autoIncrement": true
