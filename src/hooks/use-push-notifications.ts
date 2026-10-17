@@ -6,6 +6,7 @@ import { Platform } from 'react-native';
 const hasNativePush = !!requireOptionalNativeModule(
   Platform.OS === 'android' ? 'ExpoTopicSubscriptionModule' : 'ExpoPushTokenManager',
 );
+if (__DEV__ && !hasNativePush) console.warn('Push disabled: this build has no expo-notifications native code');
 
 /** See push-notifications-impl.ts. */
 export const usePushNotifications: () => void = hasNativePush
