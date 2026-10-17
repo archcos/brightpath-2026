@@ -15,6 +15,7 @@ import { Spacing } from '@/constants/theme';
 import { AuthProvider, useAuth } from '@/context/auth-context';
 import { ChildProvider } from '@/context/child-context';
 import { SettingsProvider, useSettings } from '@/context/settings-context';
+import { usePushNotifications } from '@/hooks/use-push-notifications';
 import { useColorMode, useTheme } from '@/hooks/use-theme';
 import { API_ORIGIN, ApiError } from '@/services/api';
 
@@ -68,6 +69,7 @@ function RootNavigator() {
   const isTeacher = active && user.role === 'teacher';
   const isAdmin = active && user.role === 'admin';
   const isSuper = active && user.role === 'super_admin';
+  usePushNotifications();
 
   useEffect(() => {
     if (!isLoading) SplashScreen.hideAsync();

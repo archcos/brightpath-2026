@@ -33,6 +33,7 @@ import { errorMessage } from '@/services/api';
 import { classKey as keyOf, classOptions, currentSchoolYear, schoolYears } from '@/utils/classes';
 import type { TeacherLesson } from '@/types/api';
 import { ACTIVITY_TYPE_LABEL, formatLongDate, formatMonthDay, formatRelativeDay, formatTime, plural } from '@/utils/format';
+import { notificationHref } from '@/utils/notification-link';
 
 /** "12:00 AM Tomorrow" */
 const formatWhen = (at: string) => `${formatTime(at)} ${formatRelativeDay(at)}`;
@@ -137,8 +138,8 @@ export default function TeacherHome() {
           tone="warningSoft"
           onPress={() => {
             readNotification.mutate(n.id);
-            const lessonId = n.link?.match(/^\/teacher\/lesson\/(\d+)$/)?.[1];
-            if (lessonId) router.push({ pathname: '/teacher/lesson/[id]', params: { id: lessonId } });
+            const href = notificationHref(n.link);
+            if (href) router.push(href);
           }}
           accessibilityLabel={`${n.title}. ${n.body}`}>
           <ThemedText type="smallBold">🔔 {n.title}</ThemedText>

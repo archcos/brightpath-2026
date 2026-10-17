@@ -1,4 +1,4 @@
-import { router, Stack, type Href } from 'expo-router';
+import { router, Stack } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
@@ -11,6 +11,7 @@ import { useNotifications, useReadNotifications } from '@/hooks/queries';
 import { useTheme } from '@/hooks/use-theme';
 import type { AppNotification, NotificationType } from '@/types/api';
 import { formatTimeAgo } from '@/utils/format';
+import { notificationHref } from '@/utils/notification-link';
 
 const ICON: Record<NotificationType, string> = {
   lesson_summary: '📘',
@@ -24,9 +25,6 @@ const ICON: Record<NotificationType, string> = {
   weekly_summary: '📊',
 };
 
-// Only follow links that point at known in-app screens.
-const SAFE_LINK = /^\/(?:(?:lesson|activity)\/[a-z0-9-]+|weekly)$/;
-
 export default function NotificationsScreen() {
   const theme = useTheme();
   const { child } = useChild();
@@ -36,7 +34,8 @@ export default function NotificationsScreen() {
 
   const open = (n: AppNotification) => {
     if (!n.read) read.mutate(n.id);
-    if (n.link && SAFE_LINK.test(n.link)) router.push(n.link as Href);
+    const href = notificationHref(n.link);
+    if (href) router.push(href);
   };
 
   return (

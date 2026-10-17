@@ -86,6 +86,8 @@ export const publicApi = {
 export const meApi = {
   get: () =>
     api<{ user: User; children: Child[]; teacher: TeacherProfile | null; permissions: Permissions | null }>('/me'),
+  /** This device gets push notifications while the current session lasts. */
+  pushToken: (token: string) => api<void>('/me/push-token', { method: 'PUT', json: { token } }),
   /** `code` is a one-time connection code ("ABCD-2345") from the child's teacher or school admin. */
   connectChild: (code: string, birthDate: string) =>
     api<{ child: Child }>('/me/children', { method: 'POST', json: { code, birthDate } }),
