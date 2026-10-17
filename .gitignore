@@ -46,3 +46,10 @@ example
 .env
 .env.*
 !.env.example
+
+# local build outputs (eas build --local)
+*.apk
+*.aab
+
+# Claude Code personal settings
+.claude/settings.local.json
