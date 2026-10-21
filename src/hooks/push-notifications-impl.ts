@@ -31,7 +31,7 @@ async function register() {
   }
   let { granted } = await Notifications.getPermissionsAsync();
   if (!granted) ({ granted } = await Notifications.requestPermissionsAsync());
-  if (!granted) throw new Error('notification permission not granted');
+  if (!granted) return;
   const { data } = await Notifications.getExpoPushTokenAsync({ projectId: Constants.expoConfig?.extra?.eas?.projectId });
   await meApi.pushToken(data);
 }
@@ -53,10 +53,7 @@ export function usePushNotifications() {
   useEffect(() => {
     if (!userId) return;
     // Fails in Expo Go on Android, on simulators and offline; pushes are a bonus, never block the app.
-    const retry = () =>
-      void register().catch((e) => {
-        if (__DEV__) console.warn('Push registration failed:', e instanceof Error ? e.message : e);
-      });
+    const retry = () => void register().catch(() => {});
     retry();
     const tokenSub = Notifications.addPushTokenListener(retry);
     const receivedSub = Notifications.addNotificationReceivedListener(() => void queryClient.invalidateQueries());
