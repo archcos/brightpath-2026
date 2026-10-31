@@ -13,6 +13,7 @@ import { Screen } from '@/components/ui/screen';
 import { FilterRow, Select } from '@/components/ui/select';
 import { TextField } from '@/components/ui/text-field';
 import { Spacing } from '@/constants/theme';
+import { useAuth } from '@/context/auth-context';
 import { useCreateSchool, useSchools, useSuperUsers, useUpdateSchool } from '@/hooks/super-queries';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import type { Role, School, User, UserStatus } from '@/types/api';
@@ -154,6 +155,7 @@ function SchoolsTab() {
   const { data, isLoading, error, refetch } = useSchools();
   const create = useCreateSchool();
   const update = useUpdateSchool();
+  const { manageSchool } = useAuth();
   const [name, setName] = useState('');
 
   const toggle = async (s: School) => {
@@ -206,6 +208,15 @@ function SchoolsTab() {
                 {s.pendingAdmins > 0 && <Badge label={`${s.pendingAdmins} admin request${s.pendingAdmins === 1 ? '' : 's'}`} tone="warning" />}
               </View>
             </View>
+            <Button
+              small
+              variant="secondary"
+              label="Manage as school admin"
+              onPress={() => {
+                manageSchool({ id: s.id, name: s.name });
+                router.push('/admin');
+              }}
+            />
             <Button
               small
               variant={s.status === 'active' ? 'ghost' : 'secondary'}

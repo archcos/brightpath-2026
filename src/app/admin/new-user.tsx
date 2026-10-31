@@ -22,7 +22,7 @@ const USERNAME = /^[a-z0-9._]{3,30}$/;
 
 /** School admins create teacher or parent accounts for their own school. Admin accounts are created by super admins. */
 export default function NewUserScreen() {
-  const { user, permissions } = useAuth();
+  const { user, permissions, managedSchool } = useAuth();
   const create = useCreateUser();
   const roles = roleOptions<SchoolRole>([
     ...(permissions?.manage_teachers ? (['teacher'] as const) : []),
@@ -91,7 +91,7 @@ export default function NewUserScreen() {
       <Select<SchoolRole> label="Role" options={roles} value={role} onChange={setRole} />
       {role === 'teacher' && (
         <ThemedText type="small" themeColor="textSecondary">
-          The teacher will belong to {user?.school?.name}. Assign their classes after creating the account.
+          The teacher will belong to {(managedSchool ?? user?.school)?.name}. Assign their classes after creating the account.
         </ThemedText>
       )}
       <NameFields value={name} onChange={setName} />

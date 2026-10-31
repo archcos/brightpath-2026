@@ -50,16 +50,24 @@ const NO_PERMISSIONS: Permissions = {
 };
 
 export default function AdminHome() {
-  const { user, permissions } = useAuth();
+  const { user, permissions, managedSchool } = useAuth();
   const perms = permissions ?? NO_PERMISSIONS;
   const [tab, setTab] = useState<Tab>('users');
 
   return (
     <Screen tab>
       <StaffHeader
-        eyebrow={user?.school?.name ?? 'School Admin'}
+        eyebrow={(managedSchool ?? user?.school)?.name ?? 'School Admin'}
         subtitle="Manage your school's accounts, students, sections and recording pendants."
       />
+      {user?.role === 'super_admin' && (
+        <Button
+          small
+          variant="ghost"
+          label="← Back to all schools"
+          onPress={() => (router.canGoBack() ? router.back() : router.replace('/super'))}
+        />
+      )}
       <Segmented<Tab>
         options={[
           { value: 'users', label: 'Users' },
@@ -383,6 +391,9 @@ function PendantsTab({ perms }: { perms: Permissions }) {
   const register = useRegisterPendant();
   const takeBack = useTakeBackPendant();
   const newKey = useNewPendantKey();
+  const settings = useSchoolSettings();
+  const updateSettings = useUpdateSchoolSettings();
+  const theme = useTheme();
   const [code, setCode] = useState('');
   // The server returns a device key only once; it's kept here until the admin leaves the tab.
   const [shownKey, setShownKey] = useState<{ code: string; key: string }>();
@@ -436,6 +447,26 @@ function PendantsTab({ perms }: { perms: Permissions }) {
         Parents never see pendants.
       </ThemedText>
       {!canManage && <ReadOnlyNote what="pendants" />}
+      <Card>
+        <ListRow
+          title="Teachers can make their own pendant keys"
+          subtitle="A teacher can set up the pendant they wear without asking you. You still see and can revoke every key. Off: only admins make keys."
+          right={
+            <Switch
+              value={!!settings.data?.teachersAddKeys}
+              onValueChange={(on) => updateSettings.mutate({ teachersAddKeys: on })}
+              disabled={!canManage || !settings.data || updateSettings.isPending}
+              trackColor={{ true: theme.primary }}
+              accessibilityLabel="Teachers can make their own pendant keys"
+            />
+          }
+        />
+        {updateSettings.error && (
+          <ThemedText type="caption" themeColor="danger">
+            {updateSettings.error.message}
+          </ThemedText>
+        )}
+      </Card>
       {(takeBack.error || newKey.error) && (
         <ThemedText type="caption" themeColor="danger">
           {(takeBack.error ?? newKey.error)!.message}

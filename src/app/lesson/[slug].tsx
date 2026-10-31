@@ -65,6 +65,7 @@ export default function LessonScreen() {
           🕘 {formatTime(lesson.startsAt)} • {lesson.durationMin}-minute class
         </ThemedText>
         <Badge label={lesson.summaryStatus === 'ready' ? '✨ AI Lesson Summary' : 'Preparing summary'} tone="info" />
+        {lesson.summaryLive && <Badge label="🔴 Updating live during class" tone="danger" />}
       </View>
 
       {lesson.summaryStatus !== 'ready' ? (

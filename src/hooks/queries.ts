@@ -62,7 +62,13 @@ export function useLessons(filters: { subject?: string; range?: LessonRange }) {
 
 export function useLesson(slug: string) {
   const id = useChildId();
-  return useQuery({ queryKey: keys.lesson(id, slug), queryFn: () => childApi.lesson(id, slug).then((r) => r.lesson), enabled: !!id });
+  return useQuery({
+    queryKey: keys.lesson(id, slug),
+    queryFn: () => childApi.lesson(id, slug).then((r) => r.lesson),
+    enabled: !!id,
+    // A live summary changes about every 5 minutes while the class is recorded.
+    refetchInterval: (q) => (q.state.data?.summaryLive ? 60_000 : false),
+  });
 }
 
 export function useMarkLessonViewed() {

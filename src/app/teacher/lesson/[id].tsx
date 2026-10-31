@@ -17,7 +17,7 @@ import { ApiError, errorMessage } from '@/services/api';
 import type { ClassAssignment, LessonInput } from '@/types/api';
 import { classKey, classOptions } from '@/utils/classes';
 import { confirmAction, confirmDestructive } from '@/utils/confirm';
-import { durationOptions, formatRelativeDay, formatTime, toISODate } from '@/utils/format';
+import { durationOptions, toISODate } from '@/utils/format';
 
 type Form = {
   classKey: string;
@@ -136,7 +136,7 @@ export default function LessonEditor() {
       classes={classes.data ?? []}
       pastClasses={pastClasses.data ?? []}
       archived={l?.archived ?? false}
-      aiAutoPublishAt={l?.aiDraftAt ? l.autoPublishAt : null}
+      aiSummary={!!l?.aiDraftAt}
     />
   );
 }
@@ -148,11 +148,11 @@ type LessonFormProps = {
   /** Classes the teacher no longer teaches: their items open read-only. */
   pastClasses: ClassAssignment[];
   archived: boolean;
-  /** Set for an unreviewed AI draft: when it will be published automatically. */
-  aiAutoPublishAt: string | null;
+  /** The summary is the AI's, from the class recording (already shared with parents). */
+  aiSummary: boolean;
 };
 
-function LessonForm({ id, initial, classes, pastClasses, archived, aiAutoPublishAt }: LessonFormProps) {
+function LessonForm({ id, initial, classes, pastClasses, archived, aiSummary }: LessonFormProps) {
   const save = useSaveLesson();
   const archive = useArchiveLesson();
   const [form, setForm] = useState<Form>(initial);
@@ -228,12 +228,12 @@ function LessonForm({ id, initial, classes, pastClasses, archived, aiAutoPublish
           <ThemedText type="small">Parents can&apos;t see it. Restore it to make it visible again.</ThemedText>
         </Card>
       )}
-      {aiAutoPublishAt && !archived && (
+      {aiSummary && !archived && (
         <Card tone="infoSoft">
-          <ThemedText type="smallBold">🤖 AI draft from your recording</ThemedText>
+          <ThemedText type="smallBold">🤖 AI summary from your recording</ThemedText>
           <ThemedText type="small">
-            Check the summary below, then publish it. If you don&apos;t, it&apos;s shared with parents automatically at{' '}
-            {formatTime(aiAutoPublishAt)} ({formatRelativeDay(aiAutoPublishAt)}).
+            It&apos;s already shared with parents and updates as new audio arrives during class. Saving your own changes
+            stops the AI from changing it.
           </ThemedText>
         </Card>
       )}

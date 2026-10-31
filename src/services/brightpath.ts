@@ -43,6 +43,9 @@ import type {
 
 import { api } from './api';
 
+/** School-wide switches a school admin controls. */
+type SchoolSettings = { teachersAddSections: boolean; teachersAddKeys: boolean };
+
 type AuthResponse = { token: string; user: User };
 export type AccountType = 'parent' | 'teacher' | 'admin';
 export type LessonRange = 'today' | 'week' | 'month' | 'all';
@@ -176,7 +179,9 @@ export const teacherApi = {
   /** `classes`: taught now (post and manage students). `pastClasses`: earlier years / ended, read-only. */
   classes: () => api<{ classes: ClassAssignment[]; pastClasses: ClassAssignment[] }>('/teacher/classes'),
   /** The pendant this teacher wears, or null. */
-  pendant: () => api<{ pendant: Pendant | null }>('/teacher/pendant'),
+  pendant: () => api<{ pendant: Pendant | null; canAddKeys: boolean }>('/teacher/pendant'),
+  /** A new upload key for the teacher's own pendant (shown once), if their school admin allows it. */
+  newPendantKey: () => api<{ deviceKey: string }>('/teacher/pendant/key', { method: 'POST' }),
   notifications: () => api<{ notifications: TeacherNotification[] }>('/teacher/notifications'),
   readNotification: (id: number) => api<void>(`/teacher/notifications/${id}/read`, { method: 'PATCH' }),
   recordings: () => api<{ recordings: Recording[] }>('/teacher/recordings'),
@@ -222,9 +227,8 @@ export const adminApi = {
   revokePendantKey: (id: number, keyId: number) =>
     api<{ keys: PendantKey[] }>(`/admin/pendants/${id}/keys/${keyId}/revoke`, { method: 'POST' }),
   takeBackPendant: (id: number) => api<{ pendant: Pendant }>(`/admin/pendants/${id}/take-back`, { method: 'POST' }),
-  settings: () => api<{ teachersAddSections: boolean }>('/admin/settings'),
-  updateSettings: (patch: { teachersAddSections: boolean }) =>
-    api<{ teachersAddSections: boolean }>('/admin/settings', { method: 'PATCH', json: patch }),
+  settings: () => api<SchoolSettings>('/admin/settings'),
+  updateSettings: (patch: Partial<SchoolSettings>) => api<SchoolSettings>('/admin/settings', { method: 'PATCH', json: patch }),
   sections: () => api<{ sections: Section[] }>('/admin/sections'),
   createSection: (input: { grade: number; name: string; schoolYear: string }) =>
     api<{ section: Section }>('/admin/sections', { method: 'POST', json: input }),

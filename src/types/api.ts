@@ -76,6 +76,8 @@ export type Lesson = {
   startsAt: string;
   durationMin: number;
   summaryStatus: 'preparing' | 'ready';
+  /** The class is still being recorded; the AI summary keeps updating until the final one. */
+  summaryLive: boolean;
   subject: Subject;
   teacher: string;
 };
@@ -214,10 +216,10 @@ export type TeacherLesson = {
   startsAt: string;
   durationMin: number;
   summaryStatus: 'preparing' | 'ready';
-  /** Set when the recording pipeline wrote the summary draft. */
+  /** Set while the summary is the AI's (from the recording); saving the lesson makes it the teacher's. */
   aiDraftAt: string | null;
-  /** When an unreviewed draft is published to parents automatically (null once published). */
-  autoPublishAt: string | null;
+  /** The class is still being recorded; the AI summary keeps updating until the final one. */
+  summaryLive: boolean;
   archived: boolean;
   sectionId: number;
   section: string;

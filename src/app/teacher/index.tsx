@@ -17,6 +17,8 @@ import { Spacing } from '@/constants/theme';
 import { FilterRow, Select } from '@/components/ui/select';
 import {
   useAttachRecording,
+  useCanAddPendantKeys,
+  useNewTeacherPendantKey,
   useReadTeacherNotification,
   useTeacherActivities,
   useTeacherClasses,
@@ -32,16 +34,14 @@ import { useAuth } from '@/context/auth-context';
 import { errorMessage } from '@/services/api';
 import { classKey as keyOf, classOptions, currentSchoolYear, schoolYears } from '@/utils/classes';
 import type { TeacherLesson } from '@/types/api';
-import { ACTIVITY_TYPE_LABEL, formatLongDate, formatMonthDay, formatRelativeDay, formatTime, plural } from '@/utils/format';
+import { confirmAction } from '@/utils/confirm';
+import { ACTIVITY_TYPE_LABEL, formatLongDate, formatMonthDay, formatTime, plural } from '@/utils/format';
 import { notificationHref } from '@/utils/notification-link';
-
-/** "12:00 AM Tomorrow" */
-const formatWhen = (at: string) => `${formatTime(at)} ${formatRelativeDay(at)}`;
 
 function lessonBadge(l: TeacherLesson) {
   if (l.archived) return <Badge label="Archived — hidden from parents" tone="warning" />;
+  if (l.summaryLive) return <Badge label="Live — AI updating" tone="danger" />;
   if (l.summaryStatus === 'ready') return <Badge label="Published" tone="success" />;
-  if (l.aiDraftAt && l.autoPublishAt) return <Badge label={`AI draft — posts ${formatWhen(l.autoPublishAt)}`} tone="info" />;
   return <Badge label="Draft — preparing" tone="neutral" />;
 }
 
@@ -122,6 +122,7 @@ export default function TeacherHome() {
       {pendant.data ? (
         <Card>
           <PendantStatus pendant={pendant.data} heading="My recording pendant" />
+          <PendantKeyButton code={pendant.data.code} />
         </Card>
       ) : pendant.data === null ? (
         <Card tone="primarySoft">
@@ -327,6 +328,46 @@ export default function TeacherHome() {
         </Section>
       )}
     </Screen>
+  );
+}
+
+/** Lets the teacher make an upload key for their own pendant, when their school admin allows it. */
+function PendantKeyButton({ code }: { code: string }) {
+  const { data: allowed } = useCanAddPendantKeys();
+  const newKey = useNewTeacherPendantKey();
+  // The server returns a key only once; it's kept here until the teacher taps Done.
+  const [shownKey, setShownKey] = useState<string>();
+  if (!allowed) return null;
+
+  const make = async () => {
+    const ok = await confirmAction(
+      `New upload key for ${code}?`,
+      'The key locks to the first device that uploads with it. Older keys keep working until your school admin revokes them.',
+      'New key',
+    );
+    if (ok) setShownKey((await newKey.mutateAsync().catch(() => undefined))?.deviceKey);
+  };
+
+  return shownKey ? (
+    <>
+      <ThemedText type="code" selectable>
+        {shownKey}
+      </ThemedText>
+      <ThemedText type="caption">
+        Copy it into the pendant&apos;s settings now. It won&apos;t be shown again. If it&apos;s lost, make a new one and ask your
+        school admin to revoke this one.
+      </ThemedText>
+      <Button small variant="secondary" label="Done" onPress={() => setShownKey(undefined)} />
+    </>
+  ) : (
+    <>
+      {newKey.error && (
+        <ThemedText type="caption" themeColor="danger">
+          {errorMessage(newKey.error)}
+        </ThemedText>
+      )}
+      <Button small variant="secondary" label="New upload key" onPress={make} loading={newKey.isPending} />
+    </>
   );
 }
 

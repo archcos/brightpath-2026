@@ -63,9 +63,16 @@ export const useTeacherPastClasses = () =>
 export const useTeacherPendant = () =>
   useQuery({
     queryKey: keys.pendant,
-    queryFn: () => teacherApi.pendant().then((r) => r.pendant),
+    queryFn: teacherApi.pendant,
+    select: (r) => r.pendant,
     refetchInterval: 60_000,
   });
+
+/** Whether the school admin lets this teacher make upload keys for their own pendant. */
+export const useCanAddPendantKeys = () =>
+  useQuery({ queryKey: keys.pendant, queryFn: teacherApi.pendant, select: (r) => r.canAddKeys });
+
+export const useNewTeacherPendantKey = () => useMutation({ mutationFn: teacherApi.newPendantKey });
 
 export const useTeacherLessons = () =>
   useQuery({ queryKey: keys.lessons, queryFn: () => teacherApi.lessons().then((r) => r.lessons) });

@@ -60,6 +60,12 @@ export function replaceAuthToken(token: string) {
 
 export const getAuthToken = () => authToken;
 
+// The school a super admin is managing; the server only honours it on /admin for super admins.
+let actingSchoolId: number | null = null;
+export function setActingSchool(id: number | null) {
+  actingSchoolId = id;
+}
+
 /** Called when the API rejects the token (expired/revoked) so the app can sign out. */
 export function setUnauthorizedHandler(handler: (() => void) | null) {
   onUnauthorized = handler;
@@ -95,6 +101,7 @@ export async function api<T>(path: string, init: RequestInit & { json?: unknown 
         Accept: 'application/json',
         ...(json !== undefined && { 'Content-Type': 'application/json' }),
         ...(token && { Authorization: `Bearer ${token}` }),
+        ...(actingSchoolId !== null && { 'X-School-Id': String(actingSchoolId) }),
         ...headers,
       },
       body: json !== undefined ? JSON.stringify(json) : rest.body,

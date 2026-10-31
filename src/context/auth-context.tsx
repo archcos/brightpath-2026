@@ -7,6 +7,7 @@ import {
   getAuthToken,
   replaceAuthToken,
   setAccountStateHandler,
+  setActingSchool,
   setAuthToken,
   setUnauthorizedHandler,
 } from '@/services/api';
@@ -47,8 +48,11 @@ type AuthContextValue = {
   children: Child[];
   /** Classes and profile (active teachers only). */
   teacher: TeacherProfile | null;
-  /** What a school admin may do (school admins only). */
+  /** What a school admin may do (school admins, and super admins managing a school: everything). */
   permissions: Permissions | null;
+  /** The school a super admin is managing through the school admin screens. */
+  managedSchool: ManagedSchool | null;
+  manageSchool: (school: ManagedSchool | null) => void;
   /** Set when a saved session couldn't be checked because the server is unreachable. */
   connectionError: string | null;
   /** A message for the sign-in screen, e.g. after the session expired. */
@@ -63,6 +67,15 @@ type AuthContextValue = {
   retry: () => Promise<void>;
 };
 
+type ManagedSchool = { id: number; name: string };
+
+const ALL_PERMISSIONS: Permissions = {
+  manage_teachers: true,
+  manage_parents: true,
+  manage_students: true,
+  manage_sections: true,
+};
+
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children: content }: PropsWithChildren) {
@@ -74,6 +87,7 @@ export function AuthProvider({ children: content }: PropsWithChildren) {
   const [children, setChildren] = useState<Child[]>([]);
   const [teacher, setTeacher] = useState<TeacherProfile | null>(null);
   const [permissions, setPermissions] = useState<Permissions | null>(null);
+  const [managedSchool, setManagedSchool] = useState<ManagedSchool | null>(null);
   const lastLoadedAt = useRef(0);
   const inFlight = useRef<Promise<void> | null>(null);
 
@@ -85,6 +99,8 @@ export function AuthProvider({ children: content }: PropsWithChildren) {
     setChildren([]);
     setTeacher(null);
     setPermissions(null);
+    setActingSchool(null);
+    setManagedSchool(null);
     await queryClient.cancelQueries();
     queryClient.clear();
     await storage.remove(TOKEN_KEY);
@@ -200,7 +216,14 @@ export function AuthProvider({ children: content }: PropsWithChildren) {
         user,
         children,
         teacher,
-        permissions,
+        permissions: managedSchool ? ALL_PERMISSIONS : permissions,
+        managedSchool,
+        manageSchool: (school) => {
+          setActingSchool(school?.id ?? null);
+          // Admin queries aren't keyed by school, so drop the previous school's cached data.
+          queryClient.removeQueries({ queryKey: ['admin'] });
+          setManagedSchool(school);
+        },
         connectionError,
         notice,
         signIn: async (login, password) => startSession((await authApi.login(login, password)).token),

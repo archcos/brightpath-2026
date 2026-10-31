@@ -138,7 +138,15 @@ function RootNavigator() {
           <Stack.Screen name="teacher/student-files" options={{ title: 'Excel import & codes' }} />
         </Stack.Protected>
 
-        <Stack.Protected guard={isAdmin}>
+        {/* Before the admin group, so a super admin lands on their own home. */}
+        <Stack.Protected guard={isSuper}>
+          <Stack.Screen name="super/index" options={{ headerShown: false }} />
+          <Stack.Screen name="super/user/[id]" options={{ title: 'User' }} />
+          <Stack.Screen name="super/new-user" options={{ title: 'New Account', presentation: 'modal' }} />
+        </Stack.Protected>
+
+        {/* Super admins open these for a school they pick (e.g. one with no school admin yet). */}
+        <Stack.Protected guard={isAdmin || isSuper}>
           <Stack.Screen name="admin/index" options={{ headerShown: false }} />
           <Stack.Screen name="admin/user/[id]" options={{ title: 'User' }} />
           <Stack.Screen name="admin/new-user" options={{ title: 'New User', presentation: 'modal' }} />
@@ -146,12 +154,6 @@ function RootNavigator() {
           <Stack.Screen name="admin/new-student" options={{ title: 'New Student' }} />
           <Stack.Screen name="admin/student/[id]" options={{ title: 'Student' }} />
           <Stack.Screen name="admin/student-files" options={{ title: 'Excel import & codes' }} />
-        </Stack.Protected>
-
-        <Stack.Protected guard={isSuper}>
-          <Stack.Screen name="super/index" options={{ headerShown: false }} />
-          <Stack.Screen name="super/user/[id]" options={{ title: 'User' }} />
-          <Stack.Screen name="super/new-user" options={{ title: 'New Account', presentation: 'modal' }} />
         </Stack.Protected>
 
         <Stack.Protected guard={signedIn && !active}>
