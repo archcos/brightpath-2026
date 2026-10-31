@@ -1,0 +1,10 @@
+// Cloudflare Worker serving the web export (`npx expo export -p web` → dist/) at app.brightpath-solutions.online.
+{
+  "name": "brightpath-app",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "./dist",
+    // Unknown URLs load the app shell; Expo Router then shows its not-found screen.
+    "not_found_handling": "single-page-application"
+  }
+}
