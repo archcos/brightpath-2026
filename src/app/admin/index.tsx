@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { ListRow } from '@/components/ui/list-row';
+import { Pager } from '@/components/ui/pager';
 import { Segmented } from '@/components/ui/segmented';
 import { EmptyState, ErrorState, Loading } from '@/components/ui/query-state';
 import { Screen } from '@/components/ui/screen';
@@ -24,10 +25,11 @@ import {
   useAdminUsers,
   useCreateSection,
   useNewPendantKey,
-  usePendants,
+  usePendantsPage,
   useRegisterPendant,
   useSchoolSettings,
   useSections,
+  useSectionsPage,
   useStudents,
   useTakeBackPendant,
   useUpdateSchoolSettings,
@@ -102,11 +104,13 @@ function ReadOnlyNote({ what }: { what: string }) {
 function UsersTab({ perms }: { perms: Permissions }) {
   const [filter, setFilter] = useState<UserFilter>('pending');
   const [q, setQ] = useState('');
+  const [page, setPage] = useState(1);
   const search = useDebouncedValue(q.trim());
   const { data, isLoading, error, refetch } = useAdminUsers({
     status: filter === 'pending' ? 'pending' : undefined,
     role: filter === 'pending' || filter === 'all' ? undefined : filter,
     q: search || undefined,
+    page,
   });
   const canCreate = perms.manage_teachers || perms.manage_parents;
 
@@ -123,17 +127,30 @@ function UsersTab({ perms }: { perms: Permissions }) {
           { value: 'admin', label: 'School admins' },
         ]}
         value={filter}
-        onChange={setFilter}
+        onChange={(v) => {
+          setFilter(v);
+          setPage(1);
+        }}
       />
-      <TextField label="Search" placeholder="Name, username or email" value={q} onChangeText={setQ} autoCapitalize="none" maxLength={100} />
+      <TextField
+        label="Search"
+        placeholder="Name, username or email"
+        value={q}
+        onChangeText={(v) => {
+          setQ(v);
+          setPage(1);
+        }}
+        autoCapitalize="none"
+        maxLength={100}
+      />
       {isLoading ? (
         <Loading />
       ) : error || !data ? (
         <ErrorState error={error} onRetry={refetch} />
-      ) : data.length === 0 ? (
+      ) : data.users.length === 0 ? (
         <EmptyState title={filter === 'pending' ? 'No accounts waiting for approval' : 'No users found'} />
       ) : (
-        data.map((u) => (
+        data.users.map((u) => (
           <Card
             key={u.id}
             style={styles.row}
@@ -153,6 +170,7 @@ function UsersTab({ perms }: { perms: Permissions }) {
           </Card>
         ))
       )}
+      <Pager data={data} onChange={setPage} />
       <ThemedText type="caption" themeColor="textSecondary">
         Parents appear here once they connect a child at your school. Admin accounts are managed by super admins.
       </ThemedText>
@@ -165,9 +183,14 @@ function StudentsTab({ perms }: { perms: Permissions }) {
   const update = useUpdateStudent();
   const [sectionId, setSectionId] = useState('all');
   const [status, setStatus] = useState<AdminStudent['status']>('active');
+  const [q, setQ] = useState('');
+  const [page, setPage] = useState(1);
+  const search = useDebouncedValue(q.trim());
   const { data, isLoading, error, refetch } = useStudents({
     sectionId: sectionId === 'all' ? undefined : Number(sectionId),
     status,
+    q: search || undefined,
+    page,
   });
 
   const toggle = async (s: AdminStudent) => {
@@ -208,7 +231,10 @@ function StudentsTab({ perms }: { perms: Permissions }) {
               .map((s) => ({ value: String(s.id), label: sectionName(s.grade, s.name), description: s.schoolYear })),
           ]}
           value={sectionId}
-          onChange={setSectionId}
+          onChange={(v) => {
+            setSectionId(v);
+            setPage(1);
+          }}
         />
         <Select<AdminStudent['status']>
           compact
@@ -218,9 +244,22 @@ function StudentsTab({ perms }: { perms: Permissions }) {
             { value: 'inactive', label: 'Inactive' },
           ]}
           value={status}
-          onChange={setStatus}
+          onChange={(v) => {
+            setStatus(v);
+            setPage(1);
+          }}
         />
       </FilterRow>
+      <TextField
+        label="Search"
+        placeholder="Student name or ID"
+        value={q}
+        onChangeText={(v) => {
+          setQ(v);
+          setPage(1);
+        }}
+        maxLength={100}
+      />
       {update.error && (
         <ThemedText type="caption" themeColor="danger">
           {update.error.message}
@@ -230,10 +269,10 @@ function StudentsTab({ perms }: { perms: Permissions }) {
         <Loading />
       ) : error || !data ? (
         <ErrorState error={error} onRetry={refetch} />
-      ) : data.length === 0 ? (
-        <EmptyState title={status === 'active' ? 'No active students' : 'No inactive students'} />
+      ) : data.students.length === 0 ? (
+        <EmptyState title={search ? 'No students found' : status === 'active' ? 'No active students' : 'No inactive students'} />
       ) : (
-        data.map((s) => (
+        data.students.map((s) => (
           <StudentCard key={s.id} student={s} onPress={() => router.push({ pathname: '/admin/student/[id]', params: { id: String(s.id) } })}>
             {perms.manage_students && (
               <Button
@@ -247,6 +286,7 @@ function StudentsTab({ perms }: { perms: Permissions }) {
           </StudentCard>
         ))
       )}
+      <Pager data={data} onChange={setPage} />
       <ThemedText type="caption" themeColor="textSecondary">
         Open a student to give a parent a one-time code. Each code connects one parent, once, with the birth date.
       </ThemedText>
@@ -255,7 +295,9 @@ function StudentsTab({ perms }: { perms: Permissions }) {
 }
 
 function SectionsTab({ perms }: { perms: Permissions }) {
-  const { data, isLoading, error, refetch } = useSections();
+  const [page, setPage] = useState(1);
+  const { data: paged, isLoading, error, refetch } = useSectionsPage(page);
+  const data = paged?.sections;
   const create = useCreateSection();
   const update = useUpdateSection();
   const settings = useSchoolSettings();
@@ -356,6 +398,7 @@ function SectionsTab({ perms }: { perms: Permissions }) {
           </View>
         ))
       )}
+      <Pager data={paged} onChange={setPage} />
       {perms.manage_sections && (
         <Card>
           <ThemedText type="subtitle">Add section</ThemedText>
@@ -387,7 +430,9 @@ function SectionsTab({ perms }: { perms: Permissions }) {
 
 /** The school's recording pendants: who wears each one, its status, and registering new ones. */
 function PendantsTab({ perms }: { perms: Permissions }) {
-  const { data, isLoading, error, refetch } = usePendants();
+  const [page, setPage] = useState(1);
+  const { data: paged, isLoading, error, refetch } = usePendantsPage(page);
+  const data = paged?.pendants;
   const register = useRegisterPendant();
   const takeBack = useTakeBackPendant();
   const newKey = useNewPendantKey();
@@ -400,7 +445,6 @@ function PendantsTab({ perms }: { perms: Permissions }) {
   // Which pendant's key list is open.
   const [keysOf, setKeysOf] = useState<number | null>(null);
   const canManage = perms.manage_teachers;
-  const available = (data ?? []).filter((p) => !p.teacher).length;
 
   const add = async () => {
     try {
@@ -494,7 +538,7 @@ function PendantsTab({ perms }: { perms: Permissions }) {
       ) : (
         <>
           <ThemedText type="caption" themeColor="textSecondary">
-            {plural(data.length, 'pendant')} • {available} available
+            {plural(paged!.total, 'pendant')}
           </ThemedText>
           {data.map((p) => (
             <Card key={p.id}>
@@ -539,6 +583,7 @@ function PendantsTab({ perms }: { perms: Permissions }) {
               {keysOf === p.id && <PendantKeys pendantId={p.id} pendantCode={p.code} canManage={canManage} />}
             </Card>
           ))}
+          <Pager data={paged} onChange={setPage} />
         </>
       )}
       {canManage && (

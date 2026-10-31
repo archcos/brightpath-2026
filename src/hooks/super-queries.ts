@@ -10,12 +10,15 @@ const keys = {
   user: (id: number) => ['super', 'user', id] as const,
 };
 
+/** Every school, for pickers. The Schools tab uses useSchoolsPage. */
 export const useSchools = () => useQuery({ queryKey: keys.schools, queryFn: () => superApi.schools().then((r) => r.schools) });
+export const useSchoolsPage = (page: number) =>
+  useQuery({ queryKey: [...keys.schools, 'page', page], queryFn: () => superApi.schools(page), placeholderData: keepPreviousData });
 
-export const useSuperUsers = (filters: { role?: Role; status?: UserStatus; schoolId?: number; q?: string }) =>
+export const useSuperUsers = (filters: { role?: Role; status?: UserStatus; schoolId?: number; q?: string; page: number }) =>
   useQuery({
     queryKey: keys.users(filters),
-    queryFn: () => superApi.users(filters).then((r) => r.users),
+    queryFn: () => superApi.users(filters),
     // Keep showing the current list while a new filter/search loads.
     placeholderData: keepPreviousData,
   });

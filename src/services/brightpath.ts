@@ -21,7 +21,8 @@ import type {
   Permissions,
   Recording,
   Role,
-  Saved,
+  Paged,
+  SavedPage,
   School,
   Section,
   Sex,
@@ -53,8 +54,8 @@ export type ActivityGroup = 'assignments' | 'homework' | 'quizzes' | 'exams' | '
 export type ActivityStateFilter = 'upcoming' | 'completed' | 'overdue';
 export type SavedType = 'lesson' | 'word' | 'activity';
 
-const qs = (params: Record<string, string | undefined>) => {
-  const entries = Object.entries(params).filter((e): e is [string, string] => !!e[1]);
+const qs = (params: Record<string, string | number | undefined>) => {
+  const entries = Object.entries(params).flatMap(([k, v]) => (v ? [[k, String(v)]] : []));
   return entries.length ? `?${new URLSearchParams(entries)}` : '';
 };
 const child = (id: number) => `/children/${id}`;
@@ -108,13 +109,13 @@ export const childApi = {
   weekly: (id: number) => api<Weekly>(`${child(id)}/weekly`),
   calendar: (id: number, month: string) => api<{ month: string; entries: CalendarEntry[] }>(`${child(id)}/calendar${qs({ month })}`),
 
-  lessons: (id: number, filters: { subject?: string; range?: LessonRange }) =>
-    api<{ lessons: Lesson[] }>(`${child(id)}/lessons${qs(filters)}`),
+  lessons: (id: number, filters: { subject?: string; range?: LessonRange; q?: string; page: number }) =>
+    api<Paged & { lessons: Lesson[] }>(`${child(id)}/lessons${qs(filters)}`),
   lesson: (id: number, slug: string) => api<{ lesson: LessonDetail }>(`${child(id)}/lessons/${encodeURIComponent(slug)}`),
   viewLesson: (id: number, slug: string) => api<void>(`${child(id)}/lessons/${encodeURIComponent(slug)}/view`, { method: 'POST' }),
 
-  activities: (id: number, filters: { group?: ActivityGroup; state?: ActivityStateFilter }) =>
-    api<{ activities: Activity[]; counts: ActivityCounts }>(`${child(id)}/activities${qs(filters)}`),
+  activities: (id: number, filters: { group?: ActivityGroup; state?: ActivityStateFilter; page: number }) =>
+    api<Paged & { activities: Activity[]; counts: ActivityCounts }>(`${child(id)}/activities${qs(filters)}`),
   activity: (id: number, slug: string) => api<{ activity: ActivityDetail }>(`${child(id)}/activities/${encodeURIComponent(slug)}`),
   setActivityStatus: (id: number, slug: string, status: ActivityStatus) =>
     api<{ activity: ActivityDetail }>(`${child(id)}/activities/${encodeURIComponent(slug)}/status`, {
@@ -122,20 +123,29 @@ export const childApi = {
       json: { status },
     }),
 
-  saved: (id: number) => api<Saved>(`${child(id)}/saved`),
+  saved: <T extends SavedType>(id: number, type: T, page: number) => api<SavedPage<T>>(`${child(id)}/saved${qs({ type, page })}`),
   save: (id: number, type: SavedType, itemId: number) => api<void>(`${child(id)}/saved`, { method: 'POST', json: { type, itemId } }),
   unsave: (id: number, type: SavedType, itemId: number) => api<void>(`${child(id)}/saved/${type}/${itemId}`, { method: 'DELETE' }),
 
-  notifications: (id: number) => api<{ notifications: AppNotification[] }>(`${child(id)}/notifications`),
+  notifications: (id: number, page: number) =>
+    api<Paged & { notifications: AppNotification[] }>(`${child(id)}/notifications${qs({ page })}`),
   readNotification: (id: number, notificationId: number) =>
     api<void>(`${child(id)}/notifications/${notificationId}/read`, { method: 'POST' }),
   readAllNotifications: (id: number) => api<void>(`${child(id)}/notifications/read-all`, { method: 'POST' }),
 };
 
 /** A generated file (template or code list), base64-encoded so the app saves it the same way everywhere. */
+export type TeacherContentFilters = { schoolYear?: string; sectionId?: number; subjectId?: number; page: number };
+
 export type FilePayload = { filename: string; mimeType: string; base64: string };
 
-export type StudentFilters = { sectionId?: number; status?: AdminStudent['status'] };
+export type StudentFilters = {
+  sectionId?: number;
+  schoolYear?: string;
+  status?: AdminStudent['status'];
+  q?: string;
+  page: number;
+};
 
 /**
  * Students, their one-time parent codes and parent links. Teachers (their sections) and school admins
@@ -143,9 +153,7 @@ export type StudentFilters = { sectionId?: number; status?: AdminStudent['status
  */
 const rosterApi = (base: '/teacher' | '/admin') => ({
   students: (filters: StudentFilters) =>
-    api<{ students: AdminStudent[] }>(
-      `${base}/students${qs({ sectionId: filters.sectionId ? String(filters.sectionId) : undefined, status: filters.status })}`,
-    ),
+    api<Paged & { students: AdminStudent[] }>(`${base}/students${qs(filters)}`),
   /** Also issues the student's first one-time code. */
   createStudent: (input: PersonName & { sex: Sex; sectionId: number; birthDate: string }) =>
     api<{ student: AdminStudent; code: StudentCode }>(`${base}/students`, { method: 'POST', json: input }),
@@ -188,14 +196,17 @@ export const teacherApi = {
   /** Attach a recording to one of the teacher's lessons; it is (re)summarized in the background. */
   attachRecording: (id: number, lessonId: number) =>
     api<void>(`/teacher/recordings/${id}`, { method: 'PUT', json: { lessonId } }),
+  /** Every lesson (for pickers); `lessonsPage` for the list. */
   lessons: () => api<{ lessons: TeacherLesson[] }>('/teacher/lessons'),
+  lessonsPage: (filters: TeacherContentFilters) => api<Paged & { lessons: TeacherLesson[] }>(`/teacher/lessons${qs(filters)}`),
   lesson: (id: number) => api<{ lesson: TeacherLessonDetail }>(`/teacher/lessons/${id}`),
   createLesson: (input: LessonInput) => api<{ lesson: TeacherLessonDetail }>('/teacher/lessons', { method: 'POST', json: input }),
   updateLesson: (id: number, input: LessonInput) =>
     api<{ lesson: TeacherLessonDetail }>(`/teacher/lessons/${id}`, { method: 'PUT', json: input }),
   archiveLesson: (id: number, archived: boolean) =>
     api<{ lesson: TeacherLessonDetail }>(`/teacher/lessons/${id}/archive`, { method: 'PATCH', json: { archived } }),
-  activities: () => api<{ activities: TeacherActivity[] }>('/teacher/activities'),
+  activities: (filters: TeacherContentFilters) =>
+    api<Paged & { activities: TeacherActivity[] }>(`/teacher/activities${qs(filters)}`),
   activity: (id: number) => api<{ activity: TeacherActivityDetail }>(`/teacher/activities/${id}`),
   createActivity: (input: ActivityInput) =>
     api<{ activity: TeacherActivityDetail }>('/teacher/activities', { method: 'POST', json: input }),
@@ -206,7 +217,8 @@ export const teacherApi = {
 };
 
 export const adminApi = {
-  users: (filters: { role?: Role; status?: UserStatus; q?: string }) => api<{ users: User[] }>(`/admin/users${qs(filters)}`),
+  users: (filters: { role?: Role; status?: UserStatus; q?: string; page: number }) =>
+    api<Paged & { users: User[] }>(`/admin/users${qs(filters)}`),
   user: (id: number) => api<AdminUserDetail>(`/admin/users/${id}`),
   createUser: (input: PersonName & { sex: Sex; email: string; username: string; password: string; role: 'parent' | 'teacher' }) =>
     api<{ user: User }>('/admin/users', { method: 'POST', json: input }),
@@ -217,7 +229,9 @@ export const adminApi = {
   /** Give a teacher a pendant from the pool, or take theirs back with null. */
   assignPendant: (userId: number, pendantId: number | null) =>
     api<AdminUserDetail>(`/admin/users/${userId}/pendant`, { method: 'PUT', json: { pendantId } }),
-  pendants: () => api<{ pendants: Pendant[] }>('/admin/pendants'),
+  /** Every pendant without `page` (for the "give a pendant" picker), else one page. */
+  pendants: <P extends number | undefined = undefined>(page?: P) =>
+    api<{ pendants: Pendant[] } & (P extends number ? Paged : object)>(`/admin/pendants${qs({ page })}`),
   /** The response's deviceKey is shown only once: it goes into the pendant's firmware. */
   registerPendant: (code: string) =>
     api<{ pendant: Pendant & { deviceKey: string } }>('/admin/pendants', { method: 'POST', json: { code } }),
@@ -229,7 +243,9 @@ export const adminApi = {
   takeBackPendant: (id: number) => api<{ pendant: Pendant }>(`/admin/pendants/${id}/take-back`, { method: 'POST' }),
   settings: () => api<SchoolSettings>('/admin/settings'),
   updateSettings: (patch: Partial<SchoolSettings>) => api<SchoolSettings>('/admin/settings', { method: 'PATCH', json: patch }),
-  sections: () => api<{ sections: Section[] }>('/admin/sections'),
+  /** Every section without `page` (for pickers), else one page. */
+  sections: <P extends number | undefined = undefined>(page?: P) =>
+    api<{ sections: Section[] } & (P extends number ? Paged : object)>(`/admin/sections${qs({ page })}`),
   createSection: (input: { grade: number; name: string; schoolYear: string }) =>
     api<{ section: Section }>('/admin/sections', { method: 'POST', json: input }),
   updateSection: (id: number, patch: Partial<{ grade: number; name: string; schoolYear: string; status: Section['status'] }>) =>
@@ -241,14 +257,14 @@ export const adminApi = {
 };
 
 export const superApi = {
-  schools: () => api<{ schools: School[] }>('/super/schools'),
+  /** Every school without `page` (for pickers), else one page. */
+  schools: <P extends number | undefined = undefined>(page?: P) =>
+    api<{ schools: School[] } & (P extends number ? Paged : object)>(`/super/schools${qs({ page })}`),
   createSchool: (name: string) => api<{ school: School }>('/super/schools', { method: 'POST', json: { name } }),
   updateSchool: (id: number, patch: Partial<{ name: string; status: School['status'] }>) =>
     api<{ school: School }>(`/super/schools/${id}`, { method: 'PATCH', json: patch }),
-  users: (filters: { role?: Role; status?: UserStatus; schoolId?: number; q?: string }) =>
-    api<{ users: User[] }>(
-      `/super/users${qs({ role: filters.role, status: filters.status, q: filters.q, schoolId: filters.schoolId ? String(filters.schoolId) : undefined })}`,
-    ),
+  users: (filters: { role?: Role; status?: UserStatus; schoolId?: number; q?: string; page: number }) =>
+    api<Paged & { users: User[] }>(`/super/users${qs(filters)}`),
   user: (id: number) => api<SuperUserDetail>(`/super/users/${id}`),
   createUser: (input: PersonName & { sex: Sex; email: string; username: string; password: string; role: Role; schoolId?: number }) =>
     api<SuperUserDetail>('/super/users', { method: 'POST', json: input }),

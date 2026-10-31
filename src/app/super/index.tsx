@@ -7,6 +7,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Pager } from '@/components/ui/pager';
 import { Segmented } from '@/components/ui/segmented';
 import { EmptyState, ErrorState, Loading } from '@/components/ui/query-state';
 import { Screen } from '@/components/ui/screen';
@@ -14,7 +15,7 @@ import { FilterRow, Select } from '@/components/ui/select';
 import { TextField } from '@/components/ui/text-field';
 import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth-context';
-import { useCreateSchool, useSchools, useSuperUsers, useUpdateSchool } from '@/hooks/super-queries';
+import { useCreateSchool, useSchools, useSchoolsPage, useSuperUsers, useUpdateSchool } from '@/hooks/super-queries';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import type { Role, School, User, UserStatus } from '@/types/api';
 import { confirmDestructive } from '@/utils/confirm';
@@ -66,7 +67,8 @@ function UserRow({ user }: { user: User }) {
 
 function AdminsTab() {
   const [status, setStatus] = useState<UserStatus | 'all'>('pending');
-  const { data, isLoading, error, refetch } = useSuperUsers({ role: 'admin', status: status === 'all' ? undefined : status });
+  const [page, setPage] = useState(1);
+  const { data, isLoading, error, refetch } = useSuperUsers({ role: 'admin', status: status === 'all' ? undefined : status, page });
   return (
     <View style={styles.gap}>
       <Button label="+ New account" onPress={() => router.push('/super/new-user')} />
@@ -79,17 +81,21 @@ function AdminsTab() {
           { value: 'all', label: 'All school admins' },
         ]}
         value={status}
-        onChange={setStatus}
+        onChange={(v) => {
+          setStatus(v);
+          setPage(1);
+        }}
       />
       {isLoading ? (
         <Loading />
       ) : error || !data ? (
         <ErrorState error={error} onRetry={refetch} />
-      ) : data.length === 0 ? (
+      ) : data.users.length === 0 ? (
         <EmptyState title={status === 'pending' ? 'No admin requests waiting' : 'No school admins'} />
       ) : (
-        data.map((u) => <UserRow key={u.id} user={u} />)
+        data.users.map((u) => <UserRow key={u.id} user={u} />)
       )}
+      <Pager data={data} onChange={setPage} />
     </View>
   );
 }
@@ -99,11 +105,13 @@ function UsersTab() {
   const [role, setRole] = useState<Role | 'all'>('all');
   const [schoolId, setSchoolId] = useState('all');
   const [q, setQ] = useState('');
+  const [page, setPage] = useState(1);
   const search = useDebouncedValue(q.trim());
   const { data, isLoading, error, refetch } = useSuperUsers({
     role: role === 'all' ? undefined : role,
     schoolId: schoolId === 'all' ? undefined : Number(schoolId),
     q: search || undefined,
+    page,
   });
   return (
     <View style={styles.gap}>
@@ -119,7 +127,10 @@ function UsersTab() {
             { value: 'parent', label: 'Parents' },
           ]}
           value={role}
-          onChange={setRole}
+          onChange={(v) => {
+            setRole(v);
+            setPage(1);
+          }}
         />
         <Select
           compact
@@ -134,25 +145,41 @@ function UsersTab() {
             })),
           ]}
           value={schoolId}
-          onChange={setSchoolId}
+          onChange={(v) => {
+            setSchoolId(v);
+            setPage(1);
+          }}
         />
       </FilterRow>
-      <TextField label="Search" placeholder="Name, username or email" value={q} onChangeText={setQ} autoCapitalize="none" maxLength={100} />
+      <TextField
+        label="Search"
+        placeholder="Name, username or email"
+        value={q}
+        onChangeText={(v) => {
+          setQ(v);
+          setPage(1);
+        }}
+        autoCapitalize="none"
+        maxLength={100}
+      />
       {isLoading ? (
         <Loading />
       ) : error || !data ? (
         <ErrorState error={error} onRetry={refetch} />
-      ) : data.length === 0 ? (
+      ) : data.users.length === 0 ? (
         <EmptyState title="No users found" />
       ) : (
-        data.map((u) => <UserRow key={u.id} user={u} />)
+        data.users.map((u) => <UserRow key={u.id} user={u} />)
       )}
+      <Pager data={data} onChange={setPage} />
     </View>
   );
 }
 
 function SchoolsTab() {
-  const { data, isLoading, error, refetch } = useSchools();
+  const [page, setPage] = useState(1);
+  const { data: paged, isLoading, error, refetch } = useSchoolsPage(page);
+  const data = paged?.schools;
   const create = useCreateSchool();
   const update = useUpdateSchool();
   const { manageSchool } = useAuth();
@@ -227,6 +254,7 @@ function SchoolsTab() {
           </Card>
         ))
       )}
+      <Pager data={paged} onChange={setPage} />
       <Card>
         <ThemedText type="subtitle">Add school</ThemedText>
         <TextField label="School name" wrap maxLines={2} value={name} onChangeText={setName} maxLength={160} />

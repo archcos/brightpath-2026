@@ -1,8 +1,10 @@
 import { router, Stack } from 'expo-router';
+import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { Card } from '@/components/ui/card';
+import { Pager } from '@/components/ui/pager';
 import { EmptyState, ErrorState, Loading } from '@/components/ui/query-state';
 import { Screen } from '@/components/ui/screen';
 import { Spacing } from '@/constants/theme';
@@ -28,9 +30,10 @@ const ICON: Record<NotificationType, string> = {
 export default function NotificationsScreen() {
   const theme = useTheme();
   const { child } = useChild();
-  const { data, isLoading, error, refetch, isRefetching } = useNotifications();
+  const [page, setPage] = useState(1);
+  const { data, isLoading, error, refetch, isRefetching } = useNotifications(page);
   const read = useReadNotifications();
-  const hasUnread = data?.some((n) => !n.read);
+  const hasUnread = data?.notifications.some((n) => !n.read);
 
   const open = (n: AppNotification) => {
     if (!n.read) read.mutate(n.id);
@@ -55,10 +58,10 @@ export default function NotificationsScreen() {
         <Loading />
       ) : error || !data ? (
         <ErrorState error={error} onRetry={refetch} />
-      ) : data.length === 0 ? (
+      ) : data.notifications.length === 0 ? (
         <EmptyState title="You're all caught up" />
       ) : (
-        data.map((n) => (
+        data.notifications.map((n) => (
           <Card
             key={n.id}
             onPress={() => open(n)}
@@ -79,6 +82,7 @@ export default function NotificationsScreen() {
           </Card>
         ))
       )}
+      <Pager data={data} onChange={setPage} />
     </Screen>
   );
 }

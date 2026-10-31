@@ -1,6 +1,6 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { teacherApi } from '@/services/brightpath';
+import { teacherApi, type TeacherContentFilters } from '@/services/brightpath';
 import type { ActivityInput, LessonInput } from '@/types/api';
 
 const keys = {
@@ -74,14 +74,19 @@ export const useCanAddPendantKeys = () =>
 
 export const useNewTeacherPendantKey = () => useMutation({ mutationFn: teacherApi.newPendantKey });
 
+/** One page of the teacher's lessons, for the Lessons list. */
+export const useTeacherLessonsPage = (filters: TeacherContentFilters) =>
+  useQuery({ queryKey: [...keys.lessons, 'page', filters], queryFn: () => teacherApi.lessonsPage(filters), placeholderData: keepPreviousData });
+
+/** Every lesson, for lesson pickers. */
 export const useTeacherLessons = () =>
   useQuery({ queryKey: keys.lessons, queryFn: () => teacherApi.lessons().then((r) => r.lessons) });
 
 export const useTeacherLesson = (id: number | null) =>
   useQuery({ queryKey: keys.lesson(id ?? 0), queryFn: () => teacherApi.lesson(id!).then((r) => r.lesson), enabled: !!id });
 
-export const useTeacherActivities = () =>
-  useQuery({ queryKey: keys.activities, queryFn: () => teacherApi.activities().then((r) => r.activities) });
+export const useTeacherActivities = (filters: TeacherContentFilters) =>
+  useQuery({ queryKey: [...keys.activities, filters], queryFn: () => teacherApi.activities(filters), placeholderData: keepPreviousData });
 
 export const useTeacherActivity = (id: number | null) =>
   useQuery({

@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Segmented } from '@/components/ui/segmented';
+import { Pager } from '@/components/ui/pager';
 import { EmptyState, ErrorState, Loading } from '@/components/ui/query-state';
 import { Screen } from '@/components/ui/screen';
 import { Section } from '@/components/ui/section';
@@ -23,6 +24,7 @@ import {
   useTeacherActivities,
   useTeacherClasses,
   useTeacherLessons,
+  useTeacherLessonsPage,
   useTeacherNotifications,
   useSectionOptions,
   useTeacherPastClasses,
@@ -53,28 +55,28 @@ export default function TeacherHome() {
   // Filters: a school year ('' = the one the teacher teaches in now) and one class in it ("sectionId:subjectId", '' = all).
   const [pickedYear, setPickedYear] = useState('');
   const [classKey, setClassKey] = useState('');
-  const students = useRoster('teacher', {});
   const classes = useTeacherClasses();
   const pastClasses = useTeacherPastClasses();
   const sectionOptions = useSectionOptions();
   const canAddSection = !!sectionOptions.data?.allowed;
+  // Every lesson, for the "attach a recording" picker; the Lessons list below loads page by page.
   const lessons = useTeacherLessons();
-  const activities = useTeacherActivities();
+  // One page number for the list on screen; it goes back to 1 when the tab, year or class changes.
+  const [page, setPage] = useState(1);
   const pendant = useTeacherPendant();
   const notifications = useTeacherNotifications();
   const recordings = useTeacherRecordings();
   const readNotification = useReadTeacherNotification();
   const attach = useAttachRecording();
   const refreshing =
-    classes.isRefetching || lessons.isRefetching || activities.isRefetching || pendant.isRefetching || notifications.isRefetching;
-  const refresh = () => {
+    classes.isRefetching || lessons.isRefetching || pendant.isRefetching || notifications.isRefetching;
+  // Classes, lessons, notifications and recordings; the paged lists are refetched with them below.
+  const refreshTop = () => {
     classes.refetch();
     lessons.refetch();
-    activities.refetch();
     pendant.refetch();
     notifications.refetch();
     recordings.refetch();
-    students.refetch();
   };
   const current = classes.data ?? [];
   const past = pastClasses.data ?? [];
@@ -83,7 +85,6 @@ export default function TeacherHome() {
   const thisYear = currentSchoolYear(current, past);
   const year = pickedYear || thisYear;
   const years = schoolYears(current, past);
-  const yearOf = new Map([...past, ...current].map((c) => [c.sectionId, c.schoolYear]));
   const yearClasses = current.filter((c) => c.schoolYear === year);
   const yearPast = past.filter((c) => c.schoolYear === year);
   const grades = [...new Set(yearClasses.map((c) => c.grade))].sort((a, b) => a - b);
@@ -96,16 +97,29 @@ export default function TeacherHome() {
   // Viewing something the teacher can read but no longer change (an earlier year, or an ended class).
   const readOnlyView = classKey ? past.some((c) => keyOf(c) === classKey) : !yearClasses.length;
   const [classSection, classSubject] = classKey.split(':').map(Number);
-  const inScope = (x: { sectionId: number; subject: { id: number } }) =>
-    classKey ? x.sectionId === classSection && x.subject.id === classSubject : yearOf.get(x.sectionId) === year;
-  const shownLessons = (lessons.data ?? []).filter(inScope);
-  const shownActivities = (activities.data ?? []).filter(inScope);
-  const shownStudents = (students.data ?? []).filter((st) =>
-    classKey ? st.section.id === classSection : st.section.schoolYear === year,
-  );
+  // The server filters to the class (or the whole school year) before paging.
+  const scope = classKey ? { sectionId: classSection, subjectId: classSubject } : { schoolYear: year };
+  const pageOf = (t: Tab) => (tab === t ? page : 1);
+  const lessonsPage = useTeacherLessonsPage({ ...scope, page: pageOf('lessons') });
+  const activities = useTeacherActivities({ ...scope, page: pageOf('activities') });
+  const students = useRoster('teacher', { ...(classKey ? { sectionId: classSection } : { schoolYear: year }), page: pageOf('students') });
+  const shownLessons = lessonsPage.data?.lessons ?? [];
+  const shownActivities = activities.data?.activities ?? [];
+  const shownStudents = students.data?.students ?? [];
   const pickYear = (y: string) => {
     setPickedYear(y);
     setClassKey(''); // classes belong to one school year
+    setPage(1);
+  };
+  const pickClass = (key: string) => {
+    setClassKey(key);
+    setPage(1);
+  };
+  const refresh = () => {
+    refreshTop();
+    lessonsPage.refetch();
+    activities.refetch();
+    students.refetch();
   };
   // "New" buttons start on the class being viewed, when the teacher can still post to it.
   const presetClass = classKey && current.some((c) => keyOf(c) === classKey) ? classKey : undefined;
@@ -200,7 +214,7 @@ export default function TeacherHome() {
               {years.length > 1 && (
                 <Select compact label="School year" options={yearOptions} value={year} onChange={pickYear} searchable={false} />
               )}
-              <Select compact label="Class" options={classPicker} value={classKey} onChange={setClassKey} searchPlaceholder="Search subject or section" />
+              <Select compact label="Class" options={classPicker} value={classKey} onChange={pickClass} searchPlaceholder="Search subject or section" />
             </FilterRow>
             {readOnlyView && (
               <ThemedText type="caption" themeColor="textSecondary">
@@ -230,12 +244,15 @@ export default function TeacherHome() {
 
       <Segmented<Tab>
         options={[
-          { value: 'lessons', label: `Lessons ${lessons.data ? shownLessons.length : ''}` },
-          { value: 'activities', label: `Activities ${activities.data ? shownActivities.length : ''}` },
-          { value: 'students', label: `Students ${students.data ? shownStudents.length : ''}` },
+          { value: 'lessons', label: `Lessons ${lessonsPage.data?.total ?? ''}` },
+          { value: 'activities', label: `Activities ${activities.data?.total ?? ''}` },
+          { value: 'students', label: `Students ${students.data?.total ?? ''}` },
         ]}
         value={tab}
-        onChange={setTab}
+        onChange={(t) => {
+          setTab(t);
+          setPage(1);
+        }}
       />
 
       {tab === 'students' ? (
@@ -277,11 +294,14 @@ export default function TeacherHome() {
               />
             ))
           )}
+          {!readOnlyView && <Pager data={students.data} onChange={setPage} />}
         </Section>
       ) : tab === 'lessons' ? (
         <Section title="My Lessons">
-          {lessons.isLoading ? (
+          {lessonsPage.isLoading ? (
             <Loading />
+          ) : lessonsPage.error ? (
+            <ErrorState error={lessonsPage.error} onRetry={lessonsPage.refetch} />
           ) : !shownLessons.length ? (
             <EmptyState title={classKey ? 'No lessons for this class yet' : 'No lessons yet'} />
           ) : (
@@ -301,11 +321,14 @@ export default function TeacherHome() {
               </Card>
             ))
           )}
+          <Pager data={lessonsPage.data} onChange={setPage} />
         </Section>
       ) : (
         <Section title="My Activities">
           {activities.isLoading ? (
             <Loading />
+          ) : activities.error ? (
+            <ErrorState error={activities.error} onRetry={activities.refetch} />
           ) : !shownActivities.length ? (
             <EmptyState title={classKey ? 'No activities for this class yet' : 'No activities yet'} />
           ) : (
@@ -325,6 +348,7 @@ export default function TeacherHome() {
               </Card>
             ))
           )}
+          <Pager data={activities.data} onChange={setPage} />
         </Section>
       )}
     </Screen>

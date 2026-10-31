@@ -1,7 +1,7 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { adminApi } from '@/services/brightpath';
-import type { AdminStudent, UserStatus } from '@/types/api';
+import { adminApi, type StudentFilters } from '@/services/brightpath';
+import type { UserStatus } from '@/types/api';
 
 const keys = {
   all: ['admin'] as const,
@@ -15,10 +15,10 @@ const keys = {
   students: (f: object) => ['admin', 'students', f] as const,
 };
 
-export const useAdminUsers = (filters: { role?: 'parent' | 'teacher' | 'admin'; status?: UserStatus; q?: string }) =>
+export const useAdminUsers = (filters: { role?: 'parent' | 'teacher' | 'admin'; status?: UserStatus; q?: string; page: number }) =>
   useQuery({
     queryKey: keys.users(filters),
-    queryFn: () => adminApi.users(filters).then((r) => r.users),
+    queryFn: () => adminApi.users(filters),
     // Keep showing the current list while a new filter/search loads.
     placeholderData: keepPreviousData,
   });
@@ -27,16 +27,19 @@ export const useAdminUser = (id: number) => useQuery({ queryKey: keys.user(id), 
 
 export const useSchoolSettings = () => useQuery({ queryKey: keys.settings, queryFn: adminApi.settings });
 
+/** Every section, for pickers. The Sections tab uses useSectionsPage. */
 export const useSections = () =>
   useQuery({ queryKey: keys.sections, queryFn: () => adminApi.sections().then((r) => r.sections) });
+export const useSectionsPage = (page: number) =>
+  useQuery({ queryKey: [...keys.sections, 'page', page], queryFn: () => adminApi.sections(page), placeholderData: keepPreviousData });
 
 export const useSubjects = () =>
   useQuery({ queryKey: keys.subjects, queryFn: () => adminApi.subjects().then((r) => r.subjects), staleTime: Infinity });
 
-export const useStudents = (filters: { sectionId?: number; status?: AdminStudent['status'] }) =>
+export const useStudents = (filters: StudentFilters) =>
   useQuery({
     queryKey: keys.students(filters),
-    queryFn: () => adminApi.students(filters).then((r) => r.students),
+    queryFn: () => adminApi.students(filters),
     placeholderData: keepPreviousData,
   });
 
@@ -54,8 +57,11 @@ export const useSetAssignments = () =>
   useAdminMutation(({ id, assignments }: { id: number; assignments: { sectionId: number; subjectId: number }[] }) =>
     adminApi.setAssignments(id, assignments),
   );
+/** Every pendant, for the "give a pendant" picker. The Pendants tab uses usePendantsPage. */
 export const usePendants = () =>
   useQuery({ queryKey: keys.pendants, queryFn: () => adminApi.pendants().then((r) => r.pendants) });
+export const usePendantsPage = (page: number) =>
+  useQuery({ queryKey: [...keys.pendants, 'page', page], queryFn: () => adminApi.pendants(page), placeholderData: keepPreviousData });
 export const useRegisterPendant = () => useAdminMutation(adminApi.registerPendant);
 export const useAssignPendant = () =>
   useAdminMutation(({ userId, pendantId }: { userId: number; pendantId: number | null }) =>

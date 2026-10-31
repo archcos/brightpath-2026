@@ -3,11 +3,13 @@ import { StyleSheet, TextInput, View } from 'react-native';
 
 import { LessonRow } from '@/components/lesson-card';
 import { ThemedText } from '@/components/themed-text';
+import { Pager } from '@/components/ui/pager';
 import { FilterRow, Select } from '@/components/ui/select';
 import { EmptyState, ErrorState, Loading } from '@/components/ui/query-state';
 import { Screen } from '@/components/ui/screen';
 import { Radius, Spacing } from '@/constants/theme';
 import { useChildProfile, useLessons } from '@/hooks/queries';
+import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useTheme } from '@/hooks/use-theme';
 import type { LessonRange } from '@/services/brightpath';
 import type { Lesson } from '@/types/api';
@@ -24,26 +26,25 @@ export default function LessonsScreen() {
   const [subject, setSubject] = useState('all');
   const [range, setRange] = useState<LessonRange>('week');
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const q = useDebouncedValue(search.trim());
   const profile = useChildProfile();
+  // Search runs on the server across every lesson, not just the page on screen.
   const { data, isLoading, error, refetch, isRefetching } = useLessons({
     subject: subject === 'all' ? undefined : subject,
     range,
+    q: q || undefined,
+    page,
   });
 
   const groups = useMemo(() => {
-    const term = search.trim().toLowerCase();
-    const filtered = (data ?? []).filter(
-      (l) =>
-        !term ||
-        [l.title, l.subject.name, l.teacher].some((v) => v.toLowerCase().includes(term)),
-    );
     const byDay = new Map<string, Lesson[]>();
-    for (const l of filtered) {
+    for (const l of data?.lessons ?? []) {
       const day = l.startsAt.slice(0, 10);
       byDay.set(day, [...(byDay.get(day) ?? []), l]);
     }
     return [...byDay.entries()];
-  }, [data, search]);
+  }, [data]);
 
   const subjects = [
     { value: 'all', label: 'All subjects' },
@@ -58,15 +59,36 @@ export default function LessonsScreen() {
       </View>
       <TextInput
         value={search}
-        onChangeText={setSearch}
+        onChangeText={(v) => {
+          setSearch(v);
+          setPage(1);
+        }}
         placeholder="🔍  Search lessons, subjects, teachers…"
         placeholderTextColor={theme.textSecondary}
         accessibilityLabel="Search lessons"
         style={[styles.search, { color: theme.text, backgroundColor: theme.backgroundElement, borderColor: theme.border }]}
       />
       <FilterRow>
-        <Select compact label="Subject" options={subjects} value={subject} onChange={setSubject} />
-        <Select compact label="When" options={RANGES} value={range} onChange={setRange} />
+        <Select
+          compact
+          label="Subject"
+          options={subjects}
+          value={subject}
+          onChange={(v) => {
+            setSubject(v);
+            setPage(1);
+          }}
+        />
+        <Select
+          compact
+          label="When"
+          options={RANGES}
+          value={range}
+          onChange={(v) => {
+            setRange(v);
+            setPage(1);
+          }}
+        />
       </FilterRow>
 
       {isLoading ? (
@@ -87,6 +109,7 @@ export default function LessonsScreen() {
           </View>
         ))
       )}
+      <Pager data={data} onChange={setPage} />
     </Screen>
   );
 }

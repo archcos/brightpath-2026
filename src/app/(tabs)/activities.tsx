@@ -1,9 +1,11 @@
 import { router, useLocalSearchParams } from 'expo-router';
+import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { ActivityCard } from '@/components/activity-card';
 import { StatGrid, StatTile } from '@/components/stat-tile';
 import { ThemedText } from '@/components/themed-text';
+import { Pager } from '@/components/ui/pager';
 import { FilterRow, Select } from '@/components/ui/select';
 import { EmptyState, ErrorState, Loading } from '@/components/ui/query-state';
 import { Screen } from '@/components/ui/screen';
@@ -45,9 +47,14 @@ export default function ActivitiesScreen() {
   const state = pick(STATES, params.state, 'upcoming');
   const setGroup = (value: ActivityGroup | 'all') => router.setParams({ group: value });
   const setState = (value: ActivityStateFilter) => router.setParams({ state: value });
+  // The page belongs to the current filters, so linking here with other filters starts on page 1.
+  const [paging, setPaging] = useState({ filters: '', page: 1 });
+  const filters = `${group}:${state}`;
+  const page = paging.filters === filters ? paging.page : 1;
   const { data, isLoading, error, refetch, isRefetching } = useActivities({
     group: group === 'all' ? undefined : group,
     state,
+    page,
   });
 
   return (
@@ -91,6 +98,7 @@ export default function ActivitiesScreen() {
       ) : (
         data.activities.map((a) => <ActivityCard key={a.id} activity={a} />)
       )}
+      <Pager data={data} onChange={(p) => setPaging({ filters, page: p })} />
 
       <ThemedText type="caption" themeColor="textSecondary">
         Parents can mark an activity as done or in progress. Teachers own the original instructions and due dates.

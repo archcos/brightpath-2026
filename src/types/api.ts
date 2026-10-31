@@ -164,10 +164,17 @@ export type CalendarEntry =
 
 export type ActivityCounts = { dueToday: number; overdue: number; upcoming: number; completed: number };
 
-export type Saved = {
-  lessons: { id: number; slug: string; title: string; startsAt: string; subject: Subject }[];
-  words: { id: number; word: string; lesson: { slug: string; title: string }; subject: Subject }[];
-  activities: { id: number; slug: string; title: string; type: ActivityType; dueOn: string; subject: Subject }[];
+/** One page of a list from the server: up to `pageSize` (10) rows out of `total`. */
+export type Paged = { page: number; pageSize: number; total: number };
+
+export type SavedLesson = { id: number; slug: string; title: string; startsAt: string; subject: Subject };
+export type SavedWord = { id: number; word: string; lesson: { slug: string; title: string }; subject: Subject };
+export type SavedActivity = { id: number; slug: string; title: string; type: ActivityType; dueOn: string; subject: Subject };
+type SavedItems = { lesson: SavedLesson; word: SavedWord; activity: SavedActivity };
+/** One page of one saved type, plus how many of each type are saved. */
+export type SavedPage<T extends keyof SavedItems = keyof SavedItems> = Paged & {
+  items: SavedItems[T][];
+  counts: Record<keyof SavedItems, number>;
 };
 
 export type NotificationType =

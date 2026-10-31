@@ -16,7 +16,7 @@ const keys = {
 export const useRoster = (kind: RosterKind, filters: StudentFilters) =>
   useQuery({
     queryKey: keys.students(kind, filters),
-    queryFn: () => apiFor(kind).students(filters).then((r) => r.students),
+    queryFn: () => apiFor(kind).students(filters),
     placeholderData: keepPreviousData,
   });
 

@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useChildId } from '@/context/child-context';
 import {
@@ -51,12 +51,13 @@ export function useCalendar(month: string) {
   });
 }
 
-export function useLessons(filters: { subject?: string; range?: LessonRange }) {
+export function useLessons(filters: { subject?: string; range?: LessonRange; q?: string; page: number }) {
   const id = useChildId();
   return useQuery({
     queryKey: keys.lessons(id, filters),
-    queryFn: () => childApi.lessons(id, filters).then((r) => r.lessons),
+    queryFn: () => childApi.lessons(id, filters),
     enabled: !!id,
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -84,9 +85,14 @@ export function useMarkLessonViewed() {
   });
 }
 
-export function useActivities(filters: { group?: ActivityGroup; state?: ActivityStateFilter }) {
+export function useActivities(filters: { group?: ActivityGroup; state?: ActivityStateFilter; page: number }) {
   const id = useChildId();
-  return useQuery({ queryKey: keys.activities(id, filters), queryFn: () => childApi.activities(id, filters), enabled: !!id });
+  return useQuery({
+    queryKey: keys.activities(id, filters),
+    queryFn: () => childApi.activities(id, filters),
+    enabled: !!id,
+    placeholderData: keepPreviousData,
+  });
 }
 
 export function useActivity(slug: string) {
@@ -108,9 +114,15 @@ export function useSetActivityStatus() {
   });
 }
 
-export function useSaved() {
+export function useSaved<T extends SavedType>(type: T, page: number) {
   const id = useChildId();
-  return useQuery({ queryKey: keys.saved(id), queryFn: () => childApi.saved(id), enabled: !!id });
+  return useQuery({
+    queryKey: [...keys.saved(id), type, page],
+    queryFn: () => childApi.saved(id, type, page),
+    enabled: !!id,
+    // Keep the previous page on screen only within the same type: another type's rows have another shape.
+    placeholderData: (prev, prevQuery) => (prevQuery?.queryKey[3] === type ? prev : undefined),
+  });
 }
 
 export function useToggleSaved() {
@@ -123,12 +135,13 @@ export function useToggleSaved() {
   });
 }
 
-export function useNotifications() {
+export function useNotifications(page: number) {
   const id = useChildId();
   return useQuery({
-    queryKey: keys.notifications(id),
-    queryFn: () => childApi.notifications(id).then((r) => r.notifications),
+    queryKey: [...keys.notifications(id), page],
+    queryFn: () => childApi.notifications(id, page),
     enabled: !!id,
+    placeholderData: keepPreviousData,
   });
 }
 
