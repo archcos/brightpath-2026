@@ -42,7 +42,7 @@ import { notificationHref } from '@/utils/notification-link';
 
 function lessonBadge(l: TeacherLesson) {
   if (l.archived) return <Badge label="Archived — hidden from parents" tone="warning" />;
-  if (l.summaryLive) return <Badge label="Live — AI updating" tone="danger" />;
+  if (l.summaryLive) return <Badge label="Live — full summary after class" tone="danger" />;
   if (l.summaryStatus === 'ready') return <Badge label="Published" tone="success" />;
   return <Badge label="Draft — preparing" tone="neutral" />;
 }
@@ -229,12 +229,9 @@ export default function TeacherHome() {
 
       {hasClasses && (
         <View style={styles.actions}>
-          <View style={styles.flex}>
-            <Button label="+ New Lesson" onPress={() => router.push({ pathname: '/teacher/lesson/[id]', params: { id: 'new', ...(presetClass && { classKey: presetClass }) } })} />
-          </View>
+          {/* No "+ New Lesson": lessons are made by recording a class with the pendant. */}
           <View style={styles.flex}>
             <Button
-              variant="secondary"
               label="+ New Activity"
               onPress={() => router.push({ pathname: '/teacher/activity/[id]', params: { id: 'new', ...(presetClass && { classKey: presetClass }) } })}
             />
@@ -303,7 +300,10 @@ export default function TeacherHome() {
           ) : lessonsPage.error ? (
             <ErrorState error={lessonsPage.error} onRetry={lessonsPage.refetch} />
           ) : !shownLessons.length ? (
-            <EmptyState title={classKey ? 'No lessons for this class yet' : 'No lessons yet'} />
+            <EmptyState
+              title={classKey ? 'No lessons for this class yet' : 'No lessons yet'}
+              message="Pick the class on your pendant and record it: the lesson and its summary appear here."
+            />
           ) : (
             shownLessons.map((l) => (
               <Card

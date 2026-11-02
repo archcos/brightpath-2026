@@ -200,7 +200,6 @@ export const teacherApi = {
   lessons: () => api<{ lessons: TeacherLesson[] }>('/teacher/lessons'),
   lessonsPage: (filters: TeacherContentFilters) => api<Paged & { lessons: TeacherLesson[] }>(`/teacher/lessons${qs(filters)}`),
   lesson: (id: number) => api<{ lesson: TeacherLessonDetail }>(`/teacher/lessons/${id}`),
-  createLesson: (input: LessonInput) => api<{ lesson: TeacherLessonDetail }>('/teacher/lessons', { method: 'POST', json: input }),
   updateLesson: (id: number, input: LessonInput) =>
     api<{ lesson: TeacherLessonDetail }>(`/teacher/lessons/${id}`, { method: 'PUT', json: input }),
   archiveLesson: (id: number, archived: boolean) =>

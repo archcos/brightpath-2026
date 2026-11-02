@@ -17,7 +17,7 @@ import { ApiError, errorMessage } from '@/services/api';
 import type { ClassAssignment, LessonInput } from '@/types/api';
 import { classKey, classOptions } from '@/utils/classes';
 import { confirmAction, confirmDestructive } from '@/utils/confirm';
-import { durationOptions, toISODate } from '@/utils/format';
+import { durationOptions } from '@/utils/format';
 
 type Form = {
   classKey: string;
@@ -62,21 +62,6 @@ function fieldErrors(e: unknown) {
     .join('\n');
 }
 
-// A function so "today" is computed when the form opens, not when the module first loaded.
-const empty = (): Form => ({
-  classKey: '',
-  title: '',
-  date: toISODate(new Date()),
-  time: '09:00',
-  durationMin: '40',
-  summaryStatus: 'preparing',
-  summary: '',
-  keyPoints: '',
-  words: '',
-  rememberThis: '',
-  askChild: '',
-  tryTogether: '',
-});
 
 /** "🌱 Roots absorb water" → { emoji: '🌱', text: 'Roots absorb water' }. Lines without a leading emoji get ✅. */
 function parsePoints(text: string) {
@@ -91,58 +76,54 @@ function parsePoints(text: string) {
     });
 }
 
-/** Loads the lesson (when editing), then mounts the form with its initial values. */
+/**
+ * Loads the lesson, then mounts the form with its values. Lessons are only made by class recordings (the server has
+ * no create), so this screen views and edits existing ones.
+ */
 export default function LessonEditor() {
-  // `classKey`: the class the dashboard was showing, used as the default for a new item.
-  const { id: idParam, classKey: presetClass } = useLocalSearchParams<{ id: string; classKey?: string }>();
-  const id = idParam === 'new' ? null : Number(idParam);
-  const invalidId = id !== null && !(Number.isInteger(id) && id > 0);
+  const { id: idParam } = useLocalSearchParams<{ id: string }>();
+  const id = Number(idParam);
+  const invalidId = !(Number.isInteger(id) && id > 0);
   const classes = useTeacherClasses();
   const pastClasses = useTeacherPastClasses();
   const existing = useTeacherLesson(invalidId ? null : id);
 
   if (invalidId) return <ErrorState error={new Error('This lesson link is not valid.')} />;
-  if (classes.isLoading || (id && existing.isLoading)) return <Loading />;
+  if (classes.isLoading || existing.isLoading) return <Loading />;
   if (classes.error) return <ErrorState error={classes.error} onRetry={classes.refetch} />;
-  if (existing.error) return <ErrorState error={existing.error} onRetry={existing.refetch} />;
+  if (existing.error || !existing.data) return <ErrorState error={existing.error} onRetry={existing.refetch} />;
 
   const l = existing.data;
-  const first = classes.data?.[0];
-  const initial: Form = l
-    ? {
-        classKey: `${l.sectionId}:${l.subject.id}`,
-        title: l.title,
-        date: l.startsAt.slice(0, 10),
-        time: l.startsAt.slice(11, 16),
-        durationMin: String(l.durationMin),
-        summaryStatus: l.summaryStatus,
-        summary: l.summary ?? '',
-        keyPoints: l.keyPoints.map((p) => `${p.emoji} ${p.text}`).join('\n'),
-        words: l.words.join(', '),
-        rememberThis: l.rememberThis ?? '',
-        askChild: l.askChild ?? '',
-        tryTogether: l.tryTogether ?? '',
-      }
-    : {
-        ...empty(),
-        classKey: classes.data?.some((c) => classKey(c) === presetClass) ? presetClass! : first ? classKey(first) : '',
-      };
+  const initial: Form = {
+    classKey: `${l.sectionId}:${l.subject.id}`,
+    title: l.title,
+    date: l.startsAt.slice(0, 10),
+    time: l.startsAt.slice(11, 16),
+    durationMin: String(l.durationMin),
+    summaryStatus: l.summaryStatus,
+    summary: l.summary ?? '',
+    keyPoints: l.keyPoints.map((p) => `${p.emoji} ${p.text}`).join('\n'),
+    words: l.words.join(', '),
+    rememberThis: l.rememberThis ?? '',
+    askChild: l.askChild ?? '',
+    tryTogether: l.tryTogether ?? '',
+  };
 
   return (
     <LessonForm
-      key={id ?? 'new'}
+      key={id}
       id={id}
       initial={initial}
       classes={classes.data ?? []}
       pastClasses={pastClasses.data ?? []}
-      archived={l?.archived ?? false}
-      aiSummary={!!l?.aiDraftAt}
+      archived={l.archived}
+      aiSummary={!!l.aiDraftAt}
     />
   );
 }
 
 type LessonFormProps = {
-  id: number | null;
+  id: number;
   initial: Form;
   classes: ClassAssignment[];
   /** Classes the teacher no longer teaches: their items open read-only. */
@@ -157,10 +138,10 @@ function LessonForm({ id, initial, classes, pastClasses, archived, aiSummary }: 
   const archive = useArchiveLesson();
   const [form, setForm] = useState<Form>(initial);
   const [error, setError] = useState<string>();
-  // Existing items open read-only so they can be read first; new ones start in edit mode.
-  const [editing, setEditing] = useState(id === null);
+  // Lessons open read-only so they can be read first.
+  const [editing, setEditing] = useState(false);
   // An item from a past class (e.g. last school year) can be read but not changed; the server refuses edits too.
-  const readOnly = id !== null && !classes.some((c) => classKey(c) === initial.classKey);
+  const readOnly = !classes.some((c) => classKey(c) === initial.classKey);
   const ownPastClass = readOnly ? pastClasses.filter((c) => classKey(c) === initial.classKey) : [];
 
   const cancel = () => {
@@ -174,11 +155,11 @@ function LessonForm({ id, initial, classes, pastClasses, archived, aiSummary }: 
   const submit = async () => {
     setError(undefined);
     const ok = await confirmAction(
-      id ? 'Save changes?' : 'Create lesson?',
+      'Save changes?',
       form.summaryStatus === 'ready'
         ? 'The summary is published: parents of every student in this class will see it.'
         : 'It stays a draft: parents see the lesson but not the summary yet.',
-      id ? 'Save' : 'Create',
+      'Save',
     );
     if (!ok) return;
     const [sectionId, subjectId] = form.classKey.split(':').map(Number);
@@ -206,7 +187,6 @@ function LessonForm({ id, initial, classes, pastClasses, archived, aiSummary }: 
 
   // Lessons are never deleted: archiving hides them from parents and can be undone.
   const toggleArchive = async () => {
-    if (!id) return;
     if (!archived && !(await confirmDestructive('Archive lesson?', 'Parents will no longer see it. You can restore it later.', 'Archive'))) {
       return;
     }
@@ -221,7 +201,7 @@ function LessonForm({ id, initial, classes, pastClasses, archived, aiSummary }: 
 
   return (
     <Screen>
-      <Stack.Screen options={{ title: !id ? 'New Lesson' : editing ? 'Edit Lesson' : 'Lesson' }} />
+      <Stack.Screen options={{ title: editing ? 'Edit Lesson' : 'Lesson' }} />
       {archived && (
         <Card tone="warningSoft">
           <ThemedText type="smallBold">This lesson is archived</ThemedText>
@@ -232,8 +212,8 @@ function LessonForm({ id, initial, classes, pastClasses, archived, aiSummary }: 
         <Card tone="infoSoft">
           <ThemedText type="smallBold">🤖 AI summary from your recording</ThemedText>
           <ThemedText type="small">
-            It&apos;s already shared with parents and updates as new audio arrives during class. Saving your own changes
-            stops the AI from changing it.
+            It&apos;s already shared with parents. When the class ends, the AI replaces it with a summary of the whole
+            lesson. Saving your own changes stops the AI from changing it.
           </ThemedText>
         </Card>
       )}
@@ -305,8 +285,8 @@ function LessonForm({ id, initial, classes, pastClasses, archived, aiSummary }: 
       )}
       {editing ? (
         <>
-          <Button label={id ? 'Save changes' : 'Create lesson'} onPress={submit} loading={save.isPending} disabled={!form.title || !form.classKey} />
-          {id && <Button variant="ghost" label="Cancel" onPress={cancel} />}
+          <Button label="Save changes" onPress={submit} loading={save.isPending} disabled={!form.title || !form.classKey} />
+          <Button variant="ghost" label="Cancel" onPress={cancel} />
         </>
       ) : readOnly ? (
         <Card tone="infoSoft">
@@ -318,7 +298,7 @@ function LessonForm({ id, initial, classes, pastClasses, archived, aiSummary }: 
       ) : (
         <Button label="Edit lesson" onPress={() => setEditing(true)} />
       )}
-      {id && !editing && !readOnly && (
+      {!editing && !readOnly && (
         <Button
           variant={archived ? 'secondary' : 'danger'}
           label={archived ? 'Restore lesson' : 'Archive lesson'}

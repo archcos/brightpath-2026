@@ -98,8 +98,7 @@ export const useTeacherActivity = (id: number | null) =>
 export function useSaveLesson() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, input }: { id: number | null; input: LessonInput }) =>
-      id ? teacherApi.updateLesson(id, input) : teacherApi.createLesson(input),
+    mutationFn: ({ id, input }: { id: number; input: LessonInput }) => teacherApi.updateLesson(id, input),
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.all }),
   });
 }
