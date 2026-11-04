@@ -17,7 +17,6 @@ import type { ActivityGroup, ActivityStateFilter } from '@/services/brightpath';
 const GROUPS: { value: ActivityGroup | 'all'; label: string }[] = [
   { value: 'all', label: 'All types' },
   { value: 'assignments', label: 'Assignments' },
-  { value: 'homework', label: 'Homework' },
   { value: 'quizzes', label: 'Quizzes' },
   { value: 'exams', label: 'Exams' },
   { value: 'projects', label: 'Projects' },

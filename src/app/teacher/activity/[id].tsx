@@ -48,7 +48,7 @@ const empty = (): Form => {
   const today = toISODate(new Date());
   return {
     classKey: '',
-    type: 'homework',
+    type: 'assignment',
     title: '',
     description: '',
     instructions: '',
@@ -83,7 +83,10 @@ function fieldErrors(e: unknown) {
     .join('\n');
 }
 
-const TYPES = Object.entries(ACTIVITY_TYPE_LABEL).map(([value, label]) => ({ value: value as ActivityType, label }));
+// Homework and assignments are the same thing in PH schools, so teachers only pick "Assignment".
+const TYPES = Object.entries(ACTIVITY_TYPE_LABEL)
+  .filter(([value]) => value !== 'homework')
+  .map(([value, label]) => ({ value: value as ActivityType, label }));
 
 /** Loads the activity (when editing), then mounts the form with its initial values. */
 export default function ActivityEditor() {
@@ -105,7 +108,7 @@ export default function ActivityEditor() {
   const initial: Form = a
     ? {
         classKey: `${a.sectionId}:${a.subject.id}`,
-        type: a.type,
+        type: a.type === 'homework' ? 'assignment' : a.type,
         title: a.title,
         description: a.description,
         instructions: a.instructions ?? '',

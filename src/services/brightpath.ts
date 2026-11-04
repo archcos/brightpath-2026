@@ -50,7 +50,7 @@ type SchoolSettings = { teachersAddSections: boolean; teachersAddKeys: boolean }
 type AuthResponse = { token: string; user: User };
 export type AccountType = 'parent' | 'teacher' | 'admin';
 export type LessonRange = 'today' | 'week' | 'month' | 'all';
-export type ActivityGroup = 'assignments' | 'homework' | 'quizzes' | 'exams' | 'projects' | 'events';
+export type ActivityGroup = 'assignments' | 'quizzes' | 'exams' | 'projects' | 'events';
 export type ActivityStateFilter = 'upcoming' | 'completed' | 'overdue';
 export type SavedType = 'lesson' | 'word' | 'activity';
 

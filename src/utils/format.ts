@@ -96,7 +96,7 @@ export function greeting(): string {
 
 export const ACTIVITY_TYPE_LABEL: Record<ActivityType, string> = {
   assignment: 'Assignment',
-  homework: 'Homework',
+  homework: 'Assignment', // the same thing in PH schools; older activities still have this type
   activity: 'Activity',
   quiz: 'Quiz',
   exam: 'Exam',
