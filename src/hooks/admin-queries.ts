@@ -62,6 +62,9 @@ export const usePendants = () =>
   useQuery({ queryKey: keys.pendants, queryFn: () => adminApi.pendants().then((r) => r.pendants) });
 export const usePendantsPage = (page: number) =>
   useQuery({ queryKey: [...keys.pendants, 'page', page], queryFn: () => adminApi.pendants(page), placeholderData: keepPreviousData });
+/** Every active teacher, for the "give to a teacher" picker. */
+export const useTeacherOptions = () =>
+  useQuery({ queryKey: [...keys.all, 'teacher-options'], queryFn: () => adminApi.teachers().then((r) => r.teachers) });
 export const useRegisterPendant = () => useAdminMutation(adminApi.registerPendant);
 export const useAssignPendant = () =>
   useAdminMutation(({ userId, pendantId }: { userId: number; pendantId: number | null }) =>

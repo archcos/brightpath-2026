@@ -7,6 +7,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { DateField } from '@/components/ui/date-field';
 import { Pager } from '@/components/ui/pager';
 import { Segmented } from '@/components/ui/segmented';
 import { EmptyState, ErrorState, Loading } from '@/components/ui/query-state';
@@ -15,14 +16,25 @@ import { FilterRow, Select } from '@/components/ui/select';
 import { TextField } from '@/components/ui/text-field';
 import { Spacing } from '@/constants/theme';
 import { useAuth } from '@/context/auth-context';
-import { useCreateSchool, useSchools, useSchoolsPage, useSuperUsers, useUpdateSchool } from '@/hooks/super-queries';
+import { useAudit, useCreateSchool, useSchools, useSchoolsPage, useSuperUsers, useUpdateSchool } from '@/hooks/super-queries';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
-import type { Role, School, User, UserStatus } from '@/types/api';
+import type { AuditTargetType, Role, School, User, UserStatus } from '@/types/api';
 import { confirmDestructive } from '@/utils/confirm';
-import { formatMonthDay, plural } from '@/utils/format';
+import { formatMonthDay, formatTime, plural } from '@/utils/format';
 import { ROLE_LABEL, STATUS_TONE } from '@/utils/roles';
 
-type Tab = 'schools' | 'admins' | 'users';
+type Tab = 'schools' | 'admins' | 'users' | 'audit';
+
+const AUDIT_TYPES: { value: AuditTargetType | 'all'; label: string }[] = [
+  { value: 'all', label: 'All changes' },
+  { value: 'user', label: 'Accounts' },
+  { value: 'student', label: 'Students' },
+  { value: 'section', label: 'Sections' },
+  { value: 'pendant', label: 'Pendants' },
+  { value: 'school', label: 'Schools' },
+  { value: 'lesson', label: 'Lessons' },
+  { value: 'activity', label: 'Activities' },
+];
 
 export default function SuperHome() {
   const [tab, setTab] = useState<Tab>('admins');
@@ -31,14 +43,15 @@ export default function SuperHome() {
       <StaffHeader eyebrow="BrightPath Admin" subtitle="Schools, school admins and permissions." />
       <Segmented<Tab>
         options={[
-          { value: 'admins', label: 'School admins' },
+          { value: 'admins', label: 'Admins' },
           { value: 'schools', label: 'Schools' },
           { value: 'users', label: 'All users' },
+          { value: 'audit', label: 'Audit' },
         ]}
         value={tab}
         onChange={setTab}
       />
-      {tab === 'schools' ? <SchoolsTab /> : tab === 'admins' ? <AdminsTab /> : <UsersTab />}
+      {tab === 'schools' ? <SchoolsTab /> : tab === 'admins' ? <AdminsTab /> : tab === 'users' ? <UsersTab /> : <AuditTab />}
     </Screen>
   );
 }
@@ -170,6 +183,103 @@ function UsersTab() {
         <EmptyState title="No users found" />
       ) : (
         data.users.map((u) => <UserRow key={u.id} user={u} />)
+      )}
+      <Pager data={data} onChange={setPage} />
+    </View>
+  );
+}
+
+/** Who changed what: every successful change by staff, newest first. Read-only; the server rejects edits to it. */
+function AuditTab() {
+  const schools = useSchools();
+  const [schoolId, setSchoolId] = useState('all');
+  const [type, setType] = useState<AuditTargetType | 'all'>('all');
+  const [q, setQ] = useState('');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const [page, setPage] = useState(1);
+  const search = useDebouncedValue(q.trim());
+  const { data, isLoading, error, refetch } = useAudit({
+    schoolId: schoolId === 'all' ? undefined : Number(schoolId),
+    targetType: type === 'all' ? undefined : type,
+    q: search || undefined,
+    from: from || undefined,
+    to: to || undefined,
+    page,
+  });
+  // Any filter change goes back to page 1.
+  const filter =
+    <T,>(set: (value: T) => void) =>
+    (value: T) => {
+      set(value);
+      setPage(1);
+    };
+
+  return (
+    <View style={styles.gap}>
+      <FilterRow>
+        <Select
+          compact
+          label="School"
+          searchPlaceholder="Search schools"
+          options={[
+            { value: 'all', label: 'All schools' },
+            ...(schools.data ?? []).map((s) => ({ value: String(s.id), label: s.name })),
+          ]}
+          value={schoolId}
+          onChange={filter(setSchoolId)}
+        />
+        <Select<AuditTargetType | 'all'> compact label="Type" options={AUDIT_TYPES} value={type} onChange={filter(setType)} />
+      </FilterRow>
+      <TextField
+        label="Search"
+        placeholder="Who, what they did, or what it was done to"
+        value={q}
+        onChangeText={filter(setQ)}
+        autoCapitalize="none"
+        maxLength={100}
+      />
+      <FilterRow>
+        <View style={styles.flex}>
+          <DateField label="From" mode="date" value={from} onChange={filter(setFrom)} placeholder="Any day" max={to || undefined} />
+        </View>
+        <View style={styles.flex}>
+          <DateField label="To" mode="date" value={to} onChange={filter(setTo)} placeholder="Any day" min={from || undefined} />
+        </View>
+      </FilterRow>
+      {!!(from || to) && (
+        <Button
+          small
+          variant="ghost"
+          label="Clear dates"
+          onPress={() => {
+            setFrom('');
+            setTo('');
+            setPage(1);
+          }}
+        />
+      )}
+      {isLoading ? (
+        <Loading />
+      ) : error || !data ? (
+        <ErrorState error={error} onRetry={refetch} />
+      ) : data.entries.length === 0 ? (
+        <EmptyState title="No changes found" message="Try another school, type or date." />
+      ) : (
+        data.entries.map((e) => (
+          <Card key={e.id}>
+            <ThemedText type="smallBold">{e.action}</ThemedText>
+            {e.target?.label && <ThemedText type="small">{e.target.label}</ThemedText>}
+            {e.details && <ThemedText type="caption">{e.details}</ThemedText>}
+            <ThemedText type="caption" themeColor="textSecondary">
+              {e.actor.name} • {ROLE_LABEL[e.actor.role]}
+              {e.school ? ` • ${e.school.name}` : ''}
+            </ThemedText>
+            <ThemedText type="caption" themeColor="textSecondary">
+              {formatMonthDay(e.createdAt)}, {formatTime(e.createdAt)}
+            </ThemedText>
+          </Card>
+        ))
       )}
       <Pager data={data} onChange={setPage} />
     </View>

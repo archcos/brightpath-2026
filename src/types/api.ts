@@ -167,6 +167,18 @@ export type ActivityCounts = { dueToday: number; overdue: number; upcoming: numb
 /** One page of a list from the server: up to `pageSize` (10) rows out of `total`. */
 export type Paged = { page: number; pageSize: number; total: number };
 
+export type AuditTargetType = 'user' | 'student' | 'section' | 'pendant' | 'school' | 'lesson' | 'activity';
+/** One change in the audit trail: who did what, to what, at which school. */
+export type AuditEntry = {
+  id: number;
+  action: string;
+  actor: { id: number; name: string; role: Role };
+  school: { id: number; name: string } | null;
+  target: { type: AuditTargetType; id: number | null; label: string | null } | null;
+  details: string | null;
+  createdAt: string;
+};
+
 export type SavedLesson = { id: number; slug: string; title: string; startsAt: string; subject: Subject };
 export type SavedWord = { id: number; word: string; lesson: { slug: string; title: string }; subject: Subject };
 export type SavedActivity = { id: number; slug: string; title: string; type: ActivityType; dueOn: string; subject: Subject };

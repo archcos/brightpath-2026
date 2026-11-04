@@ -1,6 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { superApi } from '@/services/brightpath';
+import { superApi, type AuditFilters } from '@/services/brightpath';
 import type { Permission, Role, UserStatus } from '@/types/api';
 
 const keys = {
@@ -21,6 +21,15 @@ export const useSuperUsers = (filters: { role?: Role; status?: UserStatus; schoo
     queryFn: () => superApi.users(filters),
     // Keep showing the current list while a new filter/search loads.
     placeholderData: keepPreviousData,
+  });
+
+export const useAudit = (filters: AuditFilters) =>
+  useQuery({
+    queryKey: [...keys.all, 'audit', filters],
+    queryFn: () => superApi.audit(filters),
+    placeholderData: keepPreviousData,
+    // Changes made elsewhere (e.g. while managing a school) don't refresh this list, so never trust the cache.
+    staleTime: 0,
   });
 
 export const useSuperUser = (id: number) => useQuery({ queryKey: keys.user(id), queryFn: () => superApi.user(id) });

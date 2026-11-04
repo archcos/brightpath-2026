@@ -7,6 +7,8 @@ import type {
   ActivityDetail,
   ActivityStatus,
   AppNotification,
+  AuditEntry,
+  AuditTargetType,
   CalendarEntry,
   Child,
   ChildProfile,
@@ -228,6 +230,8 @@ export const adminApi = {
   /** Give a teacher a pendant from the pool, or take theirs back with null. */
   assignPendant: (userId: number, pendantId: number | null) =>
     api<AdminUserDetail>(`/admin/users/${userId}/pendant`, { method: 'PUT', json: { pendantId } }),
+  /** Active teachers and the pendant each wears, for the "give to a teacher" picker. */
+  teachers: () => api<{ teachers: { id: number; name: string; pendant: string | null }[] }>('/admin/teachers'),
   /** Every pendant without `page` (for the "give a pendant" picker), else one page. */
   pendants: <P extends number | undefined = undefined>(page?: P) =>
     api<{ pendants: Pendant[] } & (P extends number ? Paged : object)>(`/admin/pendants${qs({ page })}`),
@@ -255,7 +259,17 @@ export const adminApi = {
     api<{ student: AdminStudent }>(`/admin/students/${id}`, { method: 'PATCH', json: patch }),
 };
 
+export type AuditFilters = {
+  schoolId?: number;
+  targetType?: AuditTargetType;
+  q?: string;
+  from?: string;
+  to?: string;
+  page: number;
+};
+
 export const superApi = {
+  audit: (filters: AuditFilters) => api<Paged & { entries: AuditEntry[] }>(`/super/audit${qs(filters)}`),
   /** Every school without `page` (for pickers), else one page. */
   schools: <P extends number | undefined = undefined>(page?: P) =>
     api<{ schools: School[] } & (P extends number ? Paged : object)>(`/super/schools${qs({ page })}`),

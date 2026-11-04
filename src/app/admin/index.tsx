@@ -23,6 +23,7 @@ import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useTheme } from '@/hooks/use-theme';
 import {
   useAdminUsers,
+  useAssignPendant,
   useCreateSection,
   useNewPendantKey,
   usePendantsPage,
@@ -32,6 +33,7 @@ import {
   useSectionsPage,
   useStudents,
   useTakeBackPendant,
+  useTeacherOptions,
   useUpdateSchoolSettings,
   useUpdateSection,
   useUpdateStudent,
@@ -436,6 +438,8 @@ function PendantsTab({ perms }: { perms: Permissions }) {
   const register = useRegisterPendant();
   const takeBack = useTakeBackPendant();
   const newKey = useNewPendantKey();
+  const assign = useAssignPendant();
+  const teachers = useTeacherOptions();
   const settings = useSchoolSettings();
   const updateSettings = useUpdateSchoolSettings();
   const theme = useTheme();
@@ -472,6 +476,21 @@ function PendantsTab({ perms }: { perms: Permissions }) {
     }
   };
 
+  const give = async (p: Pendant, userId: string) => {
+    const teacher = teachers.data?.find((t) => String(t.id) === userId);
+    if (
+      teacher?.pendant &&
+      !(await confirmDestructive(
+        `Give ${p.code} to ${teacher.name}?`,
+        `They wear ${teacher.pendant} now. It goes back to the pool and they get ${p.code}.`,
+        'Swap',
+      ))
+    ) {
+      return;
+    }
+    assign.mutate({ userId: Number(userId), pendantId: p.id });
+  };
+
   const confirmTakeBack = async (p: Pendant) => {
     if (
       await confirmDestructive(
@@ -487,8 +506,8 @@ function PendantsTab({ perms }: { perms: Permissions }) {
   return (
     <View style={styles.gap}>
       <ThemedText type="small" themeColor="textSecondary">
-        Each teacher wears one pendant to record their lessons. Give a teacher a pendant from their user page.
-        Parents never see pendants.
+        Each teacher wears one pendant to record their lessons. Upload keys stay with the pendant, and recordings go to
+        whoever wears it, so revoke keys for devices the new wearer won&apos;t use. Parents never see pendants.
       </ThemedText>
       {!canManage && <ReadOnlyNote what="pendants" />}
       <Card>
@@ -511,9 +530,9 @@ function PendantsTab({ perms }: { perms: Permissions }) {
           </ThemedText>
         )}
       </Card>
-      {(takeBack.error || newKey.error) && (
+      {(takeBack.error || newKey.error || assign.error) && (
         <ThemedText type="caption" themeColor="danger">
-          {(takeBack.error ?? newKey.error)!.message}
+          {(takeBack.error ?? newKey.error ?? assign.error)!.message}
         </ThemedText>
       )}
       {shownKey && (
@@ -574,6 +593,22 @@ function PendantsTab({ perms }: { perms: Permissions }) {
                   />
                 )}
               </View>
+              {!p.teacher && canManage && (
+                <Select
+                  label="Give to a teacher"
+                  placeholder={teachers.isLoading ? 'Loading teachers…' : 'Choose a teacher'}
+                  searchPlaceholder="Search teachers"
+                  emptyText="No active teachers yet"
+                  options={(teachers.data ?? []).map((t) => ({
+                    value: String(t.id),
+                    label: t.name,
+                    description: t.pendant ? `Wears ${t.pendant}` : 'No pendant yet',
+                  }))}
+                  value=""
+                  onChange={(userId) => give(p, userId)}
+                  disabled={assign.isPending}
+                />
+              )}
               <Button
                 small
                 variant="secondary"
